@@ -1,4 +1,4 @@
-const { Storage } = require('mega-js');
+const { Storage } = require('megajs');
 const axios = require('axios');
 
 module.exports = async (req, res) => {
@@ -85,7 +85,7 @@ module.exports = async (req, res) => {
     }, response.data);
 
     await uploadStream.complete;
-    
+
     console.log('Upload successful');
     return res.status(200).json({
       success: true,
