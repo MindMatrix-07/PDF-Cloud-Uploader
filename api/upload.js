@@ -45,19 +45,20 @@ module.exports = async (req, res) => {
 
   const megaEmail = process.env.MEGA_EMAIL;
   const megaPassword = process.env.MEGA_PASSWORD;
+  const megaSession = process.env.MEGA_SESSION;
 
-  if (!megaEmail || !megaPassword) {
-    return res.status(500).json({ error: 'Server environment (MEGA credentials) is not set' });
+  if (!megaSession && (!megaEmail || !megaPassword)) {
+    return res.status(500).json({ error: 'Server environment (MEGA credentials or session) is not set' });
   }
 
   try {
-    const storage = await new Storage({
-      email: megaEmail,
-      password: megaPassword,
-      autologin: true
-    }).ready;
+    const storageOptions = megaSession
+      ? { session: megaSession, autologin: true }
+      : { email: megaEmail, password: megaPassword, autologin: true };
 
-    console.log('Logged into MEGA');
+    const storage = await new Storage(storageOptions).ready;
+
+    console.log(megaSession ? 'Logged into MEGA using Session' : 'Logged into MEGA using Credentials');
 
     // Find if the folder already exists
     let folder = storage.root.children.find(
@@ -85,6 +86,34 @@ module.exports = async (req, res) => {
     }, response.data);
 
     await uploadStream.complete;
+
+    // --- Update History Log ---
+    try {
+      let historyFile = storage.root.children.find(item => item.name === 'history.json' && !item.directory);
+      let history = [];
+      if (historyFile) {
+        const data = await historyFile.downloadBuffer();
+        history = JSON.parse(data.toString());
+      }
+
+      // Keep only last 20 entries
+      history.unshift({
+        fileName,
+        chapter,
+        timestamp: new Date().toISOString(),
+        status: 'Success'
+      });
+      history = history.slice(0, 20);
+
+      // Delete old history file if it exists to overwrite
+      if (historyFile) await historyFile.delete();
+
+      await storage.root.upload('history.json', JSON.stringify(history)).complete;
+      console.log('History updated');
+    } catch (hError) {
+      console.error('History update failed:', hError);
+    }
+    // --------------------------
 
     console.log('Upload successful');
     return res.status(200).json({

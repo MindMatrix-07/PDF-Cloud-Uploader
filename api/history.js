@@ -1,0 +1,43 @@
+const { Storage } = require('megajs');
+
+module.exports = async (req, res) => {
+    res.setHeader('Access-Control-Allow-Credentials', true);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+    }
+
+    const megaEmail = process.env.MEGA_EMAIL;
+    const megaPassword = process.env.MEGA_PASSWORD;
+    const megaSession = process.env.MEGA_SESSION;
+
+    if (!megaSession && (!megaEmail || !megaPassword)) {
+        return res.status(500).json({ error: 'Server environment not set' });
+    }
+
+    try {
+        const storageOptions = megaSession
+            ? { session: megaSession, autologin: true }
+            : { email: megaEmail, password: megaPassword, autologin: true };
+
+        const storage = await new Storage(storageOptions).ready;
+
+        let historyFile = storage.root.children.find(item => item.name === 'history.json' && !item.directory);
+
+        if (!historyFile) {
+            return res.status(200).json([]);
+        }
+
+        const data = await historyFile.downloadBuffer();
+        const history = JSON.parse(data.toString());
+
+        return res.status(200).json(history);
+    } catch (error) {
+        console.error('History fetch error:', error);
+        return res.status(500).json({ error: 'Failed to fetch history', details: error.message });
+    }
+};
