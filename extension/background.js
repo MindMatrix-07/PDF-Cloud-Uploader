@@ -8,11 +8,13 @@ chrome.storage.local.get(['savedChapter'], (res) => {
   if (res.savedChapter) savedChapter = res.savedChapter;
 });
 
-// Listener for Chapter Discovery
+// Listener for Chapter Discovery (Instant Memory Update)
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   const targetUrl = changeInfo.url || tab.url;
+  if (!targetUrl) return;
+
   // PW Pattern
-  if (targetUrl && targetUrl.includes("topicName=")) {
+  if (targetUrl.includes("topicName=")) {
     try {
       const urlObj = new URL(targetUrl);
       const topic = urlObj.searchParams.get("topicName");
@@ -22,15 +24,25 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       }
     } catch (e) { }
   }
-  // Xylem/Generic Breadcrumb Pattern
-  if (targetUrl && (targetUrl.includes("/library/") || targetUrl.includes("/courses/"))) {
+
+  // Breadcrumb Pattern (Xylem/Generic)
+  if (targetUrl.includes("/library/") || targetUrl.includes("/courses/")) {
     chrome.scripting.executeScript({
       target: { tabId: tabId },
-      func: () => document.querySelector('.breadcrumb, [class*="breadcrumb"], .course-title')?.innerText || ""
+      func: () => {
+        // Find the "folder-like" parent breadcrumb
+        const items = Array.from(document.querySelectorAll('.breadcrumb-item, [class*="breadcrumb"], .course-title, .nav-link.active'));
+        return items.map(i => i.innerText).join(' > ') || document.title;
+      }
     }, (results) => {
       if (results?.[0]?.result) {
-        savedChapter = results[0].result.split('>').pop().trim().toUpperCase();
-        chrome.storage.local.set({ savedChapter: savedChapter });
+        const fullPath = results[0].result;
+        // Take the first part as Chapter (e.g., "Repeaters - JEE")
+        const chapter = fullPath.split('>')[0].split('|')[0].trim().toUpperCase();
+        if (chapter && chapter.length > 2) {
+          savedChapter = chapter;
+          chrome.storage.local.set({ savedChapter: savedChapter });
+        }
       }
     });
   }
@@ -38,16 +50,15 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
 // Centralized relay logging (Pushes to Website)
 async function relayLog(type, message, detail = "") {
-  // 1. Local logging
   const time = new Date().toLocaleTimeString();
   const entry = `[${time}] ${message}`;
+
   chrome.storage.local.get(['diagLogs'], (res) => {
     let logs = res.diagLogs || [];
     logs.unshift(entry);
     chrome.storage.local.set({ diagLogs: logs.slice(0, 20) });
   });
 
-  // 2. Remote relay (to Website)
   try {
     fetch(RELAY_URL, {
       method: 'POST',
@@ -55,10 +66,6 @@ async function relayLog(type, message, detail = "") {
       body: JSON.stringify({ type, message, detail })
     }).catch(() => { });
   } catch (e) { }
-}
-
-function logDiagnostic(msg) {
-  relayLog('INFO', msg);
 }
 
 const processedUrls = new Set();
@@ -75,22 +82,22 @@ function processPdf(pdfUrl, tabId, tabTitle) {
     } catch (e) { }
 
     processedUrls.add(pdfUrl);
-    setTimeout(() => processedUrls.delete(pdfUrl), 30000);
+    setTimeout(() => processedUrls.delete(pdfUrl), 15000); // Shorter cooldown
 
     relayLog('DETECT', `Page detected: ${pdfUrl.split('/').pop().split('?')[0]}`);
 
     let pdfTopic = tabTitle || "Document";
 
-    // Support for extraction from DOM (for custom viewers like Xylem)
     if (tabId && tabId > 0) {
       chrome.scripting.executeScript({
         target: { tabId: tabId },
         func: () => {
           const links = Array.from(document.querySelectorAll('a, iframe, embed, object'));
           const pdfLink = links.find(el => (el.href || el.src || el.data)?.toLowerCase().includes('.pdf'))?.href ||
-            links.find(el => (el.href || el.src || el.data)?.toLowerCase().includes('.pdf'))?.src ||
-            links.find(el => (el.href || el.src || el.data)?.toLowerCase().includes('.pdf'))?.data || "";
-          const title = document.querySelector('h1, h2, .pdf-title, .title, .breadcrumb-item.active, [class*="breadcrumb"]')?.innerText || "";
+            links.find(el => (el.href || el.src || el.data)?.toLowerCase().includes('.pdf'))?.src || "";
+
+          // Improved Title: Get the specific PDF title, not the whole breadcrumb
+          const title = document.querySelector('h1, h2, .pdf-title, .title, .breadcrumb-item.active')?.innerText || "";
           return { pdfLink, title };
         }
       }, (results) => {
@@ -116,13 +123,21 @@ function startUpload(pdfUrl, pdfTopic) {
 
   uploadToVercel(pdfUrl, finalFileName);
 
-  chrome.notifications.create({
-    type: 'basic',
-    iconUrl: 'icon.png',
-    title: 'Snatching PDF...',
-    message: finalFileName,
-    priority: 1
-  });
+  showNotification('Snatching PDF...', finalFileName);
+}
+
+function showNotification(title, message) {
+  if (chrome.notifications && chrome.notifications.create) {
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icon.png',
+      title: title,
+      message: message,
+      priority: 1
+    }, () => {
+      if (chrome.runtime.lastError) console.warn("Notif Err:", chrome.runtime.lastError.message);
+    });
+  }
 }
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -162,14 +177,7 @@ async function uploadToVercel(pdfUrl, fileName) {
 
       if (result.success) {
         relayLog('SUCCESS', `Upload finished: ${fileName}`, `Method: ${result.method}`);
-
-        chrome.notifications.create({
-          type: 'basic',
-          iconUrl: 'icon.png',
-          title: 'Cloud Success!',
-          message: `Saved to: ${result.chapter} (${result.method})`,
-          priority: 2
-        });
+        showNotification('Cloud Success!', `Saved to: ${result.chapter}`);
       } else {
         relayLog('ERROR', `Server ERR: ${result.error}`);
       }
