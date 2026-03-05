@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <style>
+    body {
+      width: 300px;
+      padding: 15px;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    .status {
+      color: #555;
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+
+    .url-box {
+      background: #f4f4f4;
+      border: 1px solid #ddd;
+      padding: 8px;
+      word-break: break-all;
+      font-size: 11px;
+      max-height: 100px;
+      overflow-y: auto;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px;
+      background: #00A651;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+
+    button:hover {
+      background: #008a44;
+    }
+  </style>
+</head>
+
+<body>
+  <h3>Khazana Snatcher</h3>
+  <div class="status">Latest PDF detected:</div>
+  <div id="url" class="url-box">Open a PDF on the website first...</div>
+  <button id="download">Download Static PDF</button>
+  <div id="logs-container" style="margin-top: 15px; border-top: 1px solid #ccc; padding-top: 10px; display: none;">
+    <p style="font-size: 10px; color: #666; font-weight: bold;">DIAGNOSTIC LOGS:</p>
+    <div id="logs" style="font-size: 9px; color: #444; max-height: 100px; overflow-y: auto; text-align: left;"></div>
+    <button id="clear-logs" style="font-size: 9px; margin-top: 5px;">Clear Logs</button>
+  </div>
+  <button id="toggle-logs"
+    style="background: none; border: none; color: blue; text-decoration: underline; cursor: pointer; font-size: 10px; margin-top: 10px;">Show
+    Debug Logs</button>
+
+  <script src="popup.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,123 @@
+const VERCEL_URL = "https://pdf-cloud-uploader.vercel.app/api/upload"; // REPLACE WITH YOUR VERCEL URL
+
+let savedChapter = "UNITS AND MEASUREMENTS"; // Default fallback
+
+// 1. Listen for the Chapter Name in every URL change
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  const targetUrl = changeInfo.url || tab.url;
+  if (targetUrl && targetUrl.includes("topicName=")) {
+    try {
+      const urlObj = new URL(targetUrl);
+      const topic = urlObj.searchParams.get("topicName");
+      if (topic) {
+        // Clean the name: Remove (2026), replace %20 with space
+        savedChapter = decodeURIComponent(topic).replace(/\(\d{4}\)/g, "").trim().toUpperCase();
+        console.log("Memory Locked On:", savedChapter);
+      }
+    } catch (e) { }
+  }
+});
+
+// Helper to log diagnostics for the user
+function logDiagnostic(msg) {
+  const time = new Date().toLocaleTimeString();
+  const entry = `[${time}] ${msg}`;
+  console.log(entry);
+  chrome.storage.local.get(['diagLogs'], (res) => {
+    let logs = res.diagLogs || [];
+    logs.unshift(entry);
+    chrome.storage.local.set({ diagLogs: logs.slice(0, 20) });
+  });
+}
+
+function processPdf(pdfUrl, tabId, tabTitle) {
+  if (!pdfUrl) return;
+
+  // Check if we already processed this URL recently to avoid duplicates
+  if (processedUrls.has(pdfUrl)) return;
+  processedUrls.add(pdfUrl);
+  setTimeout(() => processedUrls.delete(pdfUrl), 30000); // 30s cooldown
+
+  logDiagnostic(`🚀 PDF Detected: ${pdfUrl}`);
+
+  // Try to get title from tab title first
+  let pdfTopic = tabTitle || "Document";
+  pdfTopic = pdfTopic.replace(".pdf", "").split('|')[0].trim();
+
+  chrome.scripting.executeScript({
+    target: { tabId: tabId || 0 }, // 0 is a fallback if no tabId
+    func: () => document.querySelector('h1, h2, .pdf-title, .header-title')?.innerText || ""
+  }, (results) => {
+    if (!chrome.runtime.lastError && results && results[0].result) {
+      pdfTopic = results[0].result.split('|')[0].trim();
+    }
+
+    const finalFileName = `${pdfTopic}-${savedChapter}.pdf`.replace(/[\\/:*?"<>|]/g, "").trim();
+    logDiagnostic(`Naming file: ${finalFileName}`);
+
+    chrome.storage.local.set({ lastUrl: pdfUrl, lastFileName: finalFileName });
+    uploadToVercel(pdfUrl, finalFileName);
+
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icon.png',
+      title: 'PDF Snatched!',
+      message: `Sending ${finalFileName} to MEGA...`,
+      priority: 2
+    });
+  });
+}
+
+// 2a. Navigation-based detection
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (tab.url && tab.url.toLowerCase().includes(".pdf")) {
+    if (changeInfo.status === 'complete' || tab.status === 'complete') {
+      logDiagnostic(`Tab detection hit: ${tab.url}`);
+      processPdf(tab.url, tabId, tab.title);
+    }
+  }
+});
+
+// 2b. Header-based detection (The most reliable way)
+chrome.webRequest.onHeadersReceived.addListener(
+  (details) => {
+    // Only care about main page loads or iframe PDFs
+    if (details.type === 'main_frame' || details.type === 'sub_frame') {
+      const contentType = details.responseHeaders.find(h => h.name.toLowerCase() === 'content-type')?.value || "";
+      if (contentType.toLowerCase().includes('application/pdf') || details.url.toLowerCase().includes(".pdf")) {
+        logDiagnostic(`Header detection hit: ${details.url} (${contentType})`);
+        processPdf(details.url, details.tabId, "PDF-Document");
+      }
+    }
+  },
+  { urls: ["<all_urls>"] },
+  ["responseHeaders"]
+);
+
+async function uploadToVercel(pdfUrl, fileName) {
+  logDiagnostic(`Contacting server: ${VERCEL_URL}`);
+  try {
+    const response = await fetch(VERCEL_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pdfUrl, fileName })
+    });
+
+    const result = await response.json();
+    logDiagnostic(`Server responded success=${result.success}`);
+
+    if (result.success) {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icon.png',
+        title: 'MEGA Upload Done!',
+        message: `Saved to: ${result.chapter}`,
+        priority: 2
+      });
+    } else {
+      logDiagnostic(`ERR: ${result.error}`);
+    }
+  } catch (error) {
+    logDiagnostic(`FATAL: ${error.message}`);
+  }
+}
