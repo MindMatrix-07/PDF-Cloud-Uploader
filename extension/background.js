@@ -129,6 +129,12 @@ async function uploadToVercel(pdfUrl, fileName) {
       logDiagnostic(`Server responded success=${result.success}`);
 
       if (result.success) {
+        // Auto-save session token from server (prevents new MEGA IPs on every upload)
+        if (result.sessionString && !sessionToUse) {
+          chrome.storage.local.set({ megaSession: result.sessionString });
+          logDiagnostic(`✅ Session captured & saved (${result.method}). Future uploads will reuse it.`);
+        }
+
         chrome.notifications?.create({
           type: 'basic',
           iconUrl: 'icon.png',

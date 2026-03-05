@@ -4,321 +4,389 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloud Flow | Dashboard</title>
+    <title>Cloud Snatcher | Dashboard</title>
     <style>
         :root {
-            --primary: #00f2fe;
-            --secondary: #4facfe;
-            --bg: #0b0e14;
-            --card: rgba(255, 255, 255, 0.05);
-            --border: rgba(255, 255, 255, 0.1);
-            --success: #00C851;
-            --session: #aa66ff;
-            --creds: #33b5e5;
+            --bg: #0d1117;
+            --card: #161b22;
+            --border: #30363d;
+            --text: #e6edf3;
+            --muted: #7d8590;
+            --success: #3fb950;
+            --error: #f85149;
+            --warn: #d29922;
+            --session: #58a6ff;
         }
 
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Segoe UI', system-ui, sans-serif;
+            font-family: -apple-system, 'Segoe UI', sans-serif;
         }
 
         body {
             background: var(--bg);
-            color: white;
+            color: var(--text);
             min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 40px 20px;
-            background-image: radial-gradient(circle at 50% 50%, #1a202c 0%, #0b0e14 100%);
+            padding: 24px;
         }
 
         .header {
-            text-align: center;
-            margin-bottom: 40px;
-        }
-
-        .header h1 {
-            font-size: 3rem;
-            background: linear-gradient(to right, var(--primary), var(--secondary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            letter-spacing: -1px;
-        }
-
-        .system-status {
-            font-size: 0.8rem;
-            background: rgba(0, 0, 0, 0.3);
-            padding: 4px 12px;
-            border-radius: 20px;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            border: 1px solid var(--border);
-            margin-top: 10px;
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            background: var(--success);
-            border-radius: 50%;
-            box-shadow: 0 0 10px var(--success);
-        }
-
-        .container {
-            width: 100%;
-            max-width: 700px;
-            display: grid;
-            gap: 20px;
-        }
-
-        .card {
-            background: var(--card);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 25px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-        }
-
-        .card-title {
-            font-size: 0.9rem;
-            font-weight: bold;
-            color: rgba(255, 255, 255, 0.5);
-            text-transform: uppercase;
-            margin-bottom: 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-        }
-
-        /* Settings Area */
-        .session-input {
-            background: rgba(0, 0, 0, 0.2);
-            border: 1px solid var(--border);
-            padding: 12px 15px;
-            border-radius: 12px;
-            color: white;
-            width: 100%;
-            font-size: 0.9rem;
-            margin-bottom: 15px;
-            transition: border 0.3s;
-        }
-
-        .session-input:focus {
-            outline: none;
-            border-color: var(--primary);
-        }
-
-        .btn {
-            background: linear-gradient(to right, var(--primary), var(--secondary));
-            border: none;
-            padding: 12px 25px;
-            border-radius: 12px;
-            color: #000;
-            font-weight: bold;
-            cursor: pointer;
-            transition: transform 0.2s, opacity 0.2s;
-            font-size: 0.9rem;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            opacity: 0.9;
-        }
-
-        /* History Area */
-        .history-list {
-            display: flex;
-            flex-direction: column;
+            margin-bottom: 28px;
+            flex-wrap: wrap;
             gap: 12px;
         }
 
-        .history-item {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 15px;
-            padding: 15px;
+        .header h1 {
+            font-size: 1.4rem;
+            font-weight: 700;
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            border: 1px solid transparent;
-            transition: background 0.2s;
+            gap: 8px;
         }
 
-        .history-item:hover {
-            background: rgba(255, 255, 255, 0.03);
-            border-color: var(--border);
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 8px var(--success);
+            animation: pulse 2s infinite;
         }
 
-        .file-info {
-            flex: 1;
-            min-width: 0;
-        }
+        @keyframes pulse {
 
-        .file-name {
-            font-weight: 500;
-            font-size: 1rem;
-            margin-bottom: 4px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
+            0%,
+            100% {
+                opacity: 1
+            }
 
-        .file-meta {
-            font-size: 0.8rem;
-            color: rgba(255, 255, 255, 0.4);
-            display: flex;
-            gap: 10px;
+            50% {
+                opacity: 0.4
+            }
         }
 
         .badge {
             font-size: 0.7rem;
-            padding: 2px 8px;
-            border-radius: 6px;
-            font-weight: bold;
+            background: var(--card);
+            border: 1px solid var(--border);
+            padding: 3px 10px;
+            border-radius: 20px;
+            color: var(--muted);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .stat-card .label {
+            font-size: 0.75rem;
             text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--muted);
+            margin-bottom: 8px;
         }
 
-        .badge-session {
-            background: var(--session);
-            color: white;
+        .stat-card .value {
+            font-size: 1.8rem;
+            font-weight: 700;
         }
 
-        .badge-creds {
-            background: var(--creds);
-            color: white;
+        .value.green {
+            color: var(--success);
         }
 
-        .badge-local {
-            background: rgba(255, 255, 255, 0.1);
-            color: rgba(255, 255, 255, 0.5);
+        .value.red {
+            color: var(--error);
         }
 
-        .empty-state {
-            text-align: center;
-            padding: 40px 0;
-            color: rgba(255, 255, 255, 0.3);
-            font-style: italic;
+        .value.blue {
+            color: var(--session);
+        }
+
+        .panel {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .panel-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .refresh-btn {
-            color: var(--primary);
-            text-decoration: none;
-            font-size: 0.8rem;
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 4px 12px;
+            border-radius: 6px;
             cursor: pointer;
+            font-size: 0.75rem;
+            transition: all 0.2s;
         }
 
-        /* Notifications */
-        #toast {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: var(--success);
-            color: black;
-            padding: 12px 25px;
-            border-radius: 12px;
-            font-weight: bold;
-            display: none;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+        .refresh-btn:hover {
+            background: var(--border);
         }
 
-        @media (max-width: 600px) {
-            .header h1 {
-                font-size: 2.2rem;
-            }
+        .session-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
 
-            .history-item {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 10px;
-            }
+        .session-input {
+            flex: 1;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+
+        .session-input:focus {
+            outline: none;
+            border-color: var(--session);
+        }
+
+        .save-btn {
+            background: var(--session);
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            white-space: nowrap;
+        }
+
+        .save-btn:hover {
+            opacity: 0.85;
+        }
+
+        .session-hint {
+            font-size: 0.75rem;
+            color: var(--muted);
+        }
+
+        .session-hint a {
+            color: var(--session);
+        }
+
+        .log-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+        }
+
+        .log-table th {
+            border-bottom: 1px solid var(--border);
+            padding: 8px 12px;
+            text-align: left;
+            color: var(--muted);
+            font-weight: 500;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+
+        .log-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #21262d;
+            max-width: 280px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .log-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .log-table tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .pill.SUCCESS {
+            background: rgba(63, 185, 80, 0.15);
+            color: var(--success);
+        }
+
+        .pill.ERROR {
+            background: rgba(248, 81, 73, 0.15);
+            color: var(--error);
+        }
+
+        .pill.SESSION {
+            background: rgba(88, 166, 255, 0.15);
+            color: var(--session);
+        }
+
+        .pill.CREDENTIALS {
+            background: rgba(210, 153, 34, 0.15);
+            color: var(--warn);
+        }
+
+        .empty {
+            text-align: center;
+            padding: 40px;
+            color: var(--muted);
+            font-style: italic;
+        }
+
+        #last-updated {
+            font-size: 0.75rem;
+            color: var(--muted);
+            margin-bottom: 16px;
         }
     </style>
 </head>
 
 <body>
-
     <div class="header">
-        <h1>Cloud Flow</h1>
-        <div class="system-status">
-            <span class="status-dot"></span>
-            System Active
+        <h1><span class="dot"></span> Cloud Snatcher Dashboard</h1>
+        <span class="badge" id="status-badge">Connecting...</span>
+    </div>
+
+    <div class="grid">
+        <div class="stat-card">
+            <div class="label">Total Uploads</div>
+            <div class="value blue" id="stat-total">–</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Successful</div>
+            <div class="value green" id="stat-success">–</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Errors</div>
+            <div class="value red" id="stat-errors">–</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Auth Method</div>
+            <div class="value blue" id="stat-method">–</div>
         </div>
     </div>
 
-    <div class="container">
-        <!-- Session Manager -->
-        <div class="card">
-            <div class="card-title">Account Settings (Local)</div>
-            <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin-bottom: 15px;">
-                Enter your MEGA Session ID here. It stays in your browser and is only used to sync this dashboard's
-                history.
-            </p>
-            <input type="password" id="sessionInput" class="session-input" placeholder="Paste MEGA Session ID...">
-            <button onclick="saveSession()" class="btn">Update Session ID</button>
+    <div class="panel">
+        <div class="panel-title">MEGA Session ID (saves new sessions to prevent multiple IPs)</div>
+        <div class="session-form">
+            <input type="password" id="sessionInput" class="session-input" placeholder="Paste MEGA Session ID here...">
+            <button onclick="saveSession()" class="save-btn">Save</button>
         </div>
-
-        <!-- Recent Uploads -->
-        <div class="card">
-            <div class="card-title">
-                Recent Activity
-                <span class="refresh-btn" onclick="fetchStatus()">Check Status</span>
-            </div>
-            <div id="historyList" class="history-list">
-                <div class="empty-state">No history found on MEGA. History is now stored in your extension.</div>
-            </div>
-        </div>
-
-        <div id="env-diagnostic"
-            style="font-size: 0.7rem; color: rgba(255,255,255,0.2); text-align: center; margin-top: 20px;">
-            Connecting to backend...
-        </div>
+        <p class="session-hint">Using a Session ID instead of email/password prevents multiple IP connections on your
+            MEGA account. Get your session ID from MEGA's security settings or let the extension auto-capture it on
+            first upload.</p>
     </div>
 
-    <div id="toast">Settings Saved!</div>
+    <div class="panel">
+        <div class="panel-title">
+            Upload Log
+            <button class="refresh-btn" onclick="fetchLogs()">↻ Refresh</button>
+        </div>
+        <div id="last-updated"></div>
+        <div id="log-container">
+            <div class="empty">Loading logs...</div>
+        </div>
+    </div>
 
     <script>
-        const API_URL = window.location.origin;
-
-        // Load Session on start
-        const savedSid = localStorage.getItem('MEGA_SESSION');
-        if (savedSid) document.getElementById('sessionInput').value = savedSid;
+        const API = window.location.origin;
+        let savedSession = localStorage.getItem('MEGA_SESSION') || '';
+        if (savedSession) document.getElementById('sessionInput').value = savedSession;
 
         function saveSession() {
-            const sid = document.getElementById('sessionInput').value.trim();
-            localStorage.setItem('MEGA_SESSION', sid);
-            showToast();
-            fetchStatus();
+            const val = document.getElementById('sessionInput').value.trim();
+            localStorage.setItem('MEGA_SESSION', val);
+            document.getElementById('status-badge').textContent = 'Session Saved!';
+            setTimeout(() => document.getElementById('status-badge').textContent = 'Live', 2000);
         }
 
-        function showToast() {
-            const t = document.getElementById('toast');
-            t.style.display = 'block';
-            setTimeout(() => t.style.display = 'none', 3000);
-        }
-
-        async function fetchStatus() {
-            const diag = document.getElementById('env-diagnostic');
+        async function fetchLogs() {
             try {
-                const res = await fetch(`${API_URL}/api/history`);
+                const res = await fetch(`${API}/api/upload`);
                 const data = await res.json();
+                const logs = data.logs || [];
 
-                if (data.status === 'online') {
-                    diag.innerHTML = `Backend: ${data.status} | Session: ${data.envStatus.MEGA_SESSION} | Mode: ${data.envStatus.HISTORY_MODE}`;
+                const total = logs.length;
+                const success = logs.filter(l => l.type === 'SUCCESS').length;
+                const errors = logs.filter(l => l.type === 'ERROR').length;
+                const lastMethod = logs.find(l => l.method)?.method || '–';
+
+                document.getElementById('stat-total').textContent = total;
+                document.getElementById('stat-success').textContent = success;
+                document.getElementById('stat-errors').textContent = errors;
+                document.getElementById('stat-method').textContent = lastMethod;
+                document.getElementById('status-badge').textContent = 'Live';
+                document.getElementById('last-updated').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+
+                if (logs.length === 0) {
+                    document.getElementById('log-container').innerHTML = '<div class="empty">No uploads yet. Open a PDF to begin.</div>';
+                    return;
                 }
+
+                const rows = logs.map(log => {
+                    const time = log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '–';
+                    const type = `<span class="pill ${log.type}">${log.type}</span>`;
+                    const method = log.method ? `<span class="pill ${log.method}">${log.method}</span>` : '–';
+                    const msg = log.message || log.chapter || log.fileName || '–';
+                    const file = log.fileName || '–';
+                    return `<tr>
+            <td>${time}</td>
+            <td>${type}</td>
+            <td title="${file}">${file}</td>
+            <td>${method}</td>
+            <td title="${msg}">${msg}</td>
+          </tr>`;
+                }).join('');
+
+                document.getElementById('log-container').innerHTML = `
+          <table class="log-table">
+            <thead><tr>
+              <th>Time</th><th>Status</th><th>File</th><th>Auth</th><th>Detail</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>`;
             } catch (e) {
-                diag.innerHTML = 'Backend Connection Failed';
+                document.getElementById('status-badge').textContent = 'Offline';
+                document.getElementById('log-container').innerHTML = `<div class="empty">Cannot reach backend: ${e.message}</div>`;
             }
         }
 
-        // Initialize
-        fetchStatus();
-
-        // Note: Real history is now in extension popup. 
-        // This dashboard serves as the System Master and Config center.
+        setInterval(fetchLogs, 5000);
+        fetchLogs();
     </script>
 </body>
 
