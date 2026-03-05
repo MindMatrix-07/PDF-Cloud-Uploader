@@ -1,5 +1,4 @@
 const VERCEL_URL = "https://pdf-cloud-uploader.vercel.app/api/upload";
-const RELAY_URL = "https://pdf-cloud-uploader.vercel.app/api/relay";
 
 let savedChapter = "GENERAL";
 
@@ -8,13 +7,10 @@ chrome.storage.local.get(['savedChapter'], (res) => {
   if (res.savedChapter) savedChapter = res.savedChapter;
 });
 
-// Listener for Chapter Discovery (Instant Memory Update)
+// Listener for Chapter Discovery
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   const targetUrl = changeInfo.url || tab.url;
-  if (!targetUrl) return;
-
-  // PW Pattern
-  if (targetUrl.includes("topicName=")) {
+  if (targetUrl && targetUrl.includes("topicName=")) {
     try {
       const urlObj = new URL(targetUrl);
       const topic = urlObj.searchParams.get("topicName");
@@ -24,48 +20,17 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       }
     } catch (e) { }
   }
-
-  // Breadcrumb Pattern (Xylem/Generic)
-  if (targetUrl.includes("/library/") || targetUrl.includes("/courses/")) {
-    chrome.scripting.executeScript({
-      target: { tabId: tabId },
-      func: () => {
-        // Find the "folder-like" parent breadcrumb
-        const items = Array.from(document.querySelectorAll('.breadcrumb-item, [class*="breadcrumb"], .course-title, .nav-link.active'));
-        return items.map(i => i.innerText).join(' > ') || document.title;
-      }
-    }, (results) => {
-      if (results?.[0]?.result) {
-        const fullPath = results[0].result;
-        // Take the first part as Chapter (e.g., "Repeaters - JEE")
-        const chapter = fullPath.split('>')[0].split('|')[0].trim().toUpperCase();
-        if (chapter && chapter.length > 2) {
-          savedChapter = chapter;
-          chrome.storage.local.set({ savedChapter: savedChapter });
-        }
-      }
-    });
-  }
 });
 
-// Centralized relay logging (Pushes to Website)
-async function relayLog(type, message, detail = "") {
+// User-facing logging
+function logDiagnostic(msg) {
   const time = new Date().toLocaleTimeString();
-  const entry = `[${time}] ${message}`;
-
+  const entry = `[${time}] ${msg}`;
   chrome.storage.local.get(['diagLogs'], (res) => {
     let logs = res.diagLogs || [];
     logs.unshift(entry);
     chrome.storage.local.set({ diagLogs: logs.slice(0, 20) });
   });
-
-  try {
-    fetch(RELAY_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, message, detail })
-    }).catch(() => { });
-  } catch (e) { }
 }
 
 const processedUrls = new Set();
@@ -82,69 +47,41 @@ function processPdf(pdfUrl, tabId, tabTitle) {
     } catch (e) { }
 
     processedUrls.add(pdfUrl);
-    setTimeout(() => processedUrls.delete(pdfUrl), 15000); // Shorter cooldown
+    setTimeout(() => processedUrls.delete(pdfUrl), 30000);
 
-    relayLog('DETECT', `Page detected: ${pdfUrl.split('/').pop().split('?')[0]}`);
+    logDiagnostic(`🚀 PDF Detected: ${pdfUrl}`);
 
     let pdfTopic = tabTitle || "Document";
-
-    if (tabId && tabId > 0) {
-      chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        func: () => {
-          const links = Array.from(document.querySelectorAll('a, iframe, embed, object'));
-          const pdfLink = links.find(el => (el.href || el.src || el.data)?.toLowerCase().includes('.pdf'))?.href ||
-            links.find(el => (el.href || el.src || el.data)?.toLowerCase().includes('.pdf'))?.src || "";
-
-          // Improved Title: Get the specific PDF title, not the whole breadcrumb
-          const title = document.querySelector('h1, h2, .pdf-title, .title, .breadcrumb-item.active')?.innerText || "";
-          return { pdfLink, title };
-        }
-      }, (results) => {
-        const { pdfLink, title } = results?.[0]?.result || {};
-
-        if (pdfLink && pdfLink.toLowerCase().includes('.pdf')) {
-          relayLog('DETECT', `Hidden PDF Found: ${pdfLink.split('/').pop()}`);
-          pdfUrl = pdfLink;
-        }
-
-        if (title) pdfTopic = title.split('|')[0].split('>').pop().trim();
-        startUpload(pdfUrl, pdfTopic);
-      });
-    } else {
-      startUpload(pdfUrl, pdfTopic);
+    if (pdfTopic === "Document" || pdfTopic === "PDF") {
+      const filename = pdfUrl.split('/').pop().split('?')[0].replace(".pdf", "");
+      if (filename.length > 5) pdfTopic = filename;
     }
-  } catch (err) { relayLog('ERROR', `Detection Error: ${err.message}`); }
-}
+    pdfTopic = pdfTopic.replace(".pdf", "").split('|')[0].trim();
 
-function startUpload(pdfUrl, pdfTopic) {
-  const finalFileName = `${pdfTopic}-${savedChapter}.pdf`.replace(/[\\/:*?"<>|]/g, "").trim();
-  relayLog('START', `Starting upload: ${finalFileName}`, `From: ${pdfUrl}`);
+    chrome.scripting.executeScript({
+      target: { tabId: tabId > 0 ? tabId : 0 },
+      func: () => document.querySelector('h1, h2, .pdf-title')?.innerText || ""
+    }, (results) => {
+      if (results?.[0]?.result) pdfTopic = results[0].result.split('|')[0].trim();
 
-  uploadToVercel(pdfUrl, finalFileName);
+      const finalFileName = `${pdfTopic}-${savedChapter}.pdf`.replace(/[\\/:*?"<>|]/g, "").trim();
+      logDiagnostic(`Attempting upload: ${finalFileName}`);
 
-  showNotification('Snatching PDF...', finalFileName);
-}
+      uploadToVercel(pdfUrl, finalFileName);
 
-function showNotification(title, message) {
-  if (chrome.notifications && chrome.notifications.create) {
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: 'icon.png',
-      title: title,
-      message: message,
-      priority: 1
-    }, () => {
-      if (chrome.runtime.lastError) console.warn("Notif Err:", chrome.runtime.lastError.message);
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icon.png',
+        title: 'Snatching PDF...',
+        message: finalFileName,
+        priority: 1
+      });
     });
-  }
+  } catch (err) { logDiagnostic(`ERR: ${err.message}`); }
 }
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  const isPdfUrl = tab.url?.toLowerCase().includes(".pdf");
-  const isPdfViewer = tab.url?.toLowerCase().includes("/pdf-viewer") || tab.url?.toLowerCase().includes("/pdf_viewer");
-
-  if ((isPdfUrl || isPdfViewer) && (changeInfo.status === 'complete' || tab.status === 'complete')) {
+  if (tab.url?.toLowerCase().includes(".pdf") && (changeInfo.status === 'complete' || tab.status === 'complete')) {
     processPdf(tab.url, tabId, tab.title);
   }
 });
@@ -176,13 +113,32 @@ async function uploadToVercel(pdfUrl, fileName) {
       const result = await response.json();
 
       if (result.success) {
-        relayLog('SUCCESS', `Upload finished: ${fileName}`, `Method: ${result.method}`);
-        showNotification('Cloud Success!', `Saved to: ${result.chapter}`);
+        logDiagnostic(`✅ SUCCESS: ${result.method} login`);
+
+        // Save to Local History
+        chrome.storage.local.get(['uploadHistory'], (hRes) => {
+          let history = hRes.uploadHistory || [];
+          history.unshift({
+            fileName: fileName,
+            method: result.method,
+            timestamp: result.timestamp,
+            chapter: result.chapter
+          });
+          chrome.storage.local.set({ uploadHistory: history.slice(0, 20) });
+        });
+
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icon.png',
+          title: 'Cloud Success!',
+          message: `Saved to: ${result.chapter} (${result.method})`,
+          priority: 2
+        });
       } else {
-        relayLog('ERROR', `Server ERR: ${result.error}`);
+        logDiagnostic(`❌ FAIL: ${result.error}`);
       }
     } catch (error) {
-      relayLog('ERROR', `Network FATAL: ${error.message}`);
+      logDiagnostic(`🚨 FATAL: ${error.message}`);
     }
   });
 }

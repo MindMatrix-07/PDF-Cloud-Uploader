@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloud Flow | Live Status</title>
+    <title>Cloud Flow | Dashboard</title>
     <style>
         :root {
             --primary: #00f2fe;
@@ -12,17 +12,16 @@
             --bg: #0b0e14;
             --card: rgba(255, 255, 255, 0.05);
             --border: rgba(255, 255, 255, 0.1);
-            --success: #00e676;
-            --error: #ff5252;
-            --start: #ffd740;
-            --detect: #40c4ff;
+            --success: #00C851;
+            --session: #aa66ff;
+            --creds: #33b5e5;
         }
 
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Inter', 'Segoe UI', sans-serif;
+            font-family: 'Segoe UI', system-ui, sans-serif;
         }
 
         body {
@@ -46,8 +45,7 @@
             background: linear-gradient(to right, var(--primary), var(--secondary));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            letter-spacing: -2px;
-            font-weight: 800;
+            letter-spacing: -1px;
         }
 
         .system-status {
@@ -68,215 +66,175 @@
             background: var(--success);
             border-radius: 50%;
             box-shadow: 0 0 10px var(--success);
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% {
-                opacity: 1;
-            }
-
-            50% {
-                opacity: 0.4;
-            }
-
-            100% {
-                opacity: 1;
-            }
         }
 
         .container {
             width: 100%;
-            max-width: 800px;
+            max-width: 700px;
             display: grid;
             gap: 20px;
         }
 
         .card {
             background: var(--card);
-            backdrop-filter: blur(15px);
+            backdrop-filter: blur(10px);
             border: 1px solid var(--border);
-            border-radius: 24px;
-            padding: 30px;
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
         }
 
         .card-title {
-            font-size: 0.8rem;
-            font-weight: 700;
-            color: rgba(255, 255, 255, 0.4);
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: rgba(255, 255, 255, 0.5);
             text-transform: uppercase;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            letter-spacing: 1px;
         }
 
-        /* Session Manager */
-        .session-group {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-
+        /* Settings Area */
         .session-input {
-            background: rgba(0, 0, 0, 0.3);
+            background: rgba(0, 0, 0, 0.2);
             border: 1px solid var(--border);
-            padding: 14px 18px;
-            border-radius: 14px;
+            padding: 12px 15px;
+            border-radius: 12px;
             color: white;
-            flex: 1;
+            width: 100%;
             font-size: 0.9rem;
-            transition: all 0.3s;
+            margin-bottom: 15px;
+            transition: border 0.3s;
         }
 
         .session-input:focus {
             outline: none;
             border-color: var(--primary);
-            background: rgba(0, 0, 0, 0.5);
         }
 
         .btn {
             background: linear-gradient(to right, var(--primary), var(--secondary));
             border: none;
-            padding: 12px 24px;
-            border-radius: 14px;
+            padding: 12px 25px;
+            border-radius: 12px;
             color: #000;
-            font-weight: 700;
+            font-weight: bold;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: transform 0.2s, opacity 0.2s;
             font-size: 0.9rem;
-            white-space: nowrap;
         }
 
         .btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(0, 242, 254, 0.2);
+            opacity: 0.9;
         }
 
-        /* Activity Feed */
-        .feed {
+        /* History Area */
+        .history-list {
             display: flex;
             flex-direction: column;
-            gap: 15px;
-            max-height: 500px;
-            overflow-y: auto;
-            padding-right: 10px;
+            gap: 12px;
         }
 
-        .feed::-webkit-scrollbar {
-            width: 4px;
-        }
-
-        .feed::-webkit-scrollbar-thumb {
-            background: var(--border);
-            border-radius: 10px;
-        }
-
-        .event {
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 18px;
-            padding: 18px;
+        .history-item {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 15px;
+            padding: 15px;
             display: flex;
-            gap: 18px;
+            justify-content: space-between;
+            align-items: center;
             border: 1px solid transparent;
-            transition: all 0.3s;
-            animation: slideIn 0.4s ease-out;
+            transition: background 0.2s;
         }
 
-        .event:hover {
-            background: rgba(255, 255, 255, 0.05);
+        .history-item:hover {
+            background: rgba(255, 255, 255, 0.03);
             border-color: var(--border);
         }
 
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .event-icon {
-            width: 44px;
-            height: 44px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.2rem;
-            flex-shrink: 0;
-        }
-
-        .icon-detect {
-            background: rgba(64, 196, 255, 0.1);
-            color: var(--detect);
-        }
-
-        .icon-start {
-            background: rgba(255, 215, 64, 0.1);
-            color: var(--start);
-        }
-
-        .icon-success {
-            background: rgba(0, 230, 118, 0.1);
-            color: var(--success);
-        }
-
-        .icon-error {
-            background: rgba(255, 82, 82, 0.1);
-            color: var(--error);
-        }
-
-        .event-body {
+        .file-info {
             flex: 1;
             min-width: 0;
         }
 
-        .event-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 4px;
-        }
-
-        .event-msg {
-            font-weight: 600;
+        .file-name {
+            font-weight: 500;
             font-size: 1rem;
-            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 4px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
-        .event-time {
-            font-size: 0.75rem;
-            color: rgba(255, 255, 255, 0.3);
+        .file-meta {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.4);
+            display: flex;
+            gap: 10px;
         }
 
-        .event-detail {
-            font-size: 0.85rem;
+        .badge {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .badge-session {
+            background: var(--session);
+            color: white;
+        }
+
+        .badge-creds {
+            background: var(--creds);
+            color: white;
+        }
+
+        .badge-local {
+            background: rgba(255, 255, 255, 0.1);
             color: rgba(255, 255, 255, 0.5);
-            line-height: 1.4;
         }
 
         .empty-state {
             text-align: center;
-            padding: 60px 0;
-            color: rgba(255, 255, 255, 0.2);
+            padding: 40px 0;
+            color: rgba(255, 255, 255, 0.3);
             font-style: italic;
         }
 
-        #env-diagnostic {
-            font-size: 0.7rem;
-            color: rgba(255, 255, 255, 0.2);
-            text-align: center;
-            margin-top: 30px;
-            letter-spacing: 0.5px;
+        .refresh-btn {
+            color: var(--primary);
+            text-decoration: none;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        /* Notifications */
+        #toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--success);
+            color: black;
+            padding: 12px 25px;
+            border-radius: 12px;
+            font-weight: bold;
+            display: none;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        @media (max-width: 600px) {
+            .header h1 {
+                font-size: 2.2rem;
+            }
+
+            .history-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
         }
     </style>
 </head>
@@ -287,109 +245,80 @@
         <h1>Cloud Flow</h1>
         <div class="system-status">
             <span class="status-dot"></span>
-            Live Monitoring Active
+            System Active
         </div>
     </div>
 
     <div class="container">
-        <!-- Settings -->
+        <!-- Session Manager -->
         <div class="card">
-            <div class="card-title">Session Configuration</div>
-            <div class="session-group">
-                <input type="password" id="sessionInput" class="session-input" placeholder="Paste MEGA Session ID...">
-                <button onclick="saveSession()" class="btn">Update Session</button>
-            </div>
-            <p style="font-size: 0.75rem; color: rgba(255,255,255,0.3);">Session ID is stored locally in your browser
-                for secure syncing.</p>
+            <div class="card-title">Account Settings (Local)</div>
+            <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin-bottom: 15px;">
+                Enter your MEGA Session ID here. It stays in your browser and is only used to sync this dashboard's
+                history.
+            </p>
+            <input type="password" id="sessionInput" class="session-input" placeholder="Paste MEGA Session ID...">
+            <button onclick="saveSession()" class="btn">Update Session ID</button>
         </div>
 
-        <!-- Live Feed -->
+        <!-- Recent Uploads -->
         <div class="card">
             <div class="card-title">
-                Activity Relay
-                <span style="color: var(--primary); cursor: pointer;" onclick="refreshFeed()">Refresh</span>
+                Recent Activity
+                <span class="refresh-btn" onclick="fetchStatus()">Check Status</span>
             </div>
-            <div id="feed" class="feed">
-                <div class="empty-state">Waiting for extension activity...</div>
+            <div id="historyList" class="history-list">
+                <div class="empty-state">No history found on MEGA. History is now stored in your extension.</div>
             </div>
         </div>
 
-        <div id="env-diagnostic">Initializing connections...</div>
+        <div id="env-diagnostic"
+            style="font-size: 0.7rem; color: rgba(255,255,255,0.2); text-align: center; margin-top: 20px;">
+            Connecting to backend...
+        </div>
     </div>
+
+    <div id="toast">Settings Saved!</div>
 
     <script>
         const API_URL = window.location.origin;
-        let lastActivityJson = "";
 
-        // Load Session
+        // Load Session on start
         const savedSid = localStorage.getItem('MEGA_SESSION');
         if (savedSid) document.getElementById('sessionInput').value = savedSid;
 
         function saveSession() {
             const sid = document.getElementById('sessionInput').value.trim();
             localStorage.setItem('MEGA_SESSION', sid);
-            alert("Session updated locally!");
+            showToast();
+            fetchStatus();
         }
 
-        async function refreshFeed() {
-            const feedDiv = document.getElementById('feed');
-            const diag = document.getElementById('env-diagnostic');
+        function showToast() {
+            const t = document.getElementById('toast');
+            t.style.display = 'block';
+            setTimeout(() => t.style.display = 'none', 3000);
+        }
 
+        async function fetchStatus() {
+            const diag = document.getElementById('env-diagnostic');
             try {
                 const res = await fetch(`${API_URL}/api/history`);
                 const data = await res.json();
 
                 if (data.status === 'online') {
-                    diag.innerHTML = `Backend: Online | Mode: Live Relay | Session(Env): ${data.envStatus.MEGA_SESSION}`;
-
-                    const activity = data.activity || [];
-                    const currentJson = JSON.stringify(activity);
-
-                    if (currentJson !== lastActivityJson) {
-                        lastActivityJson = currentJson;
-                        renderFeed(activity);
-                    }
+                    diag.innerHTML = `Backend: ${data.status} | Session: ${data.envStatus.MEGA_SESSION} | Mode: ${data.envStatus.HISTORY_MODE}`;
                 }
             } catch (e) {
-                diag.innerHTML = 'Backend Connection Lost';
+                diag.innerHTML = 'Backend Connection Failed';
             }
         }
 
-        function renderFeed(activity) {
-            const feedDiv = document.getElementById('feed');
-            if (activity.length === 0) {
-                feedDiv.innerHTML = '<div class="empty-state">No recent activity detected.</div>';
-                return;
-            }
+        // Initialize
+        fetchStatus();
 
-            feedDiv.innerHTML = activity.map(event => {
-                const iconMap = {
-                    'DETECT': { emoji: '🚀', class: 'icon-detect' },
-                    'START': { emoji: '⏳', class: 'icon-start' },
-                    'SUCCESS': { emoji: '✅', class: 'icon-success' },
-                    'ERROR': { emoji: '🚨', class: 'icon-error' }
-                };
-                const icon = iconMap[event.type] || { emoji: '•', class: '' };
-                const timeStr = new Date(event.timestamp).toLocaleTimeString();
-
-                return `
-                    <div class="event">
-                        <div class="event-icon ${icon.class}">${icon.emoji}</div>
-                        <div class="event-body">
-                            <div class="event-header">
-                                <span class="event-msg">${event.message}</span>
-                                <span class="event-time">${timeStr}</span>
-                            </div>
-                            <div class="event-detail">${event.detail}</div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        // Auto-refresh every 2 seconds
-        setInterval(refreshFeed, 2000);
-        refreshFeed();
+        // Note: Real history is now in extension popup. 
+        // This dashboard serves as the System Master and Config center.
     </script>
 </body>
 
