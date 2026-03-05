@@ -72,15 +72,18 @@ function processPdf(pdfUrl, tabId, tabTitle) {
   pdfTopic = pdfTopic.replace(".pdf", "").split('|')[0].trim();
 
   chrome.scripting.executeScript({
-    target: { tabId: tabId || 0 }, // 0 is a fallback if no tabId
+    target: { tabId: tabId > 0 ? tabId : 0 },
     func: () => document.querySelector('h1, h2, .pdf-title, .header-title')?.innerText || ""
   }, (results) => {
-    if (!chrome.runtime.lastError && results && results[0].result) {
+    if (chrome.runtime.lastError) {
+      logDiagnostic(`Scripting Note: Using tab/URL title (page restricted)`);
+    } else if (results && results[0].result) {
       pdfTopic = results[0].result.split('|')[0].trim();
+      logDiagnostic(`Extracted Topic: ${pdfTopic}`);
     }
 
     const finalFileName = `${pdfTopic}-${savedChapter}.pdf`.replace(/[\\/:*?"<>|]/g, "").trim();
-    logDiagnostic(`Naming file: ${finalFileName}`);
+    logDiagnostic(`FINAL NAME: ${finalFileName}`);
 
     chrome.storage.local.set({ lastUrl: pdfUrl, lastFileName: finalFileName });
     uploadToVercel(pdfUrl, finalFileName);

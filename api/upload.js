@@ -71,7 +71,9 @@ module.exports = async (req, res) => {
     }
 
     const storage = await new Storage(storageOptions).ready;
-    console.log('Login successful');
+    if (!storage.root) throw new Error("MEGA storage root is not accessible.");
+
+    console.log('MEGA Ready. Finding folder...');
 
     // Find if the folder already exists
     let folder = storage.root.children.find(
@@ -79,7 +81,7 @@ module.exports = async (req, res) => {
     );
 
     if (!folder) {
-      console.log(`Creating folder: ${chapter}`);
+      console.log(`Creating new folder: ${chapter}`);
       folder = await storage.mkdir(chapter);
     }
 
