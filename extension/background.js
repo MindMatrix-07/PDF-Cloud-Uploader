@@ -11,6 +11,7 @@ chrome.storage.local.get(['savedChapter'], (res) => {
 // Listener for Chapter Discovery
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   const targetUrl = changeInfo.url || tab.url;
+  // PW Pattern
   if (targetUrl && targetUrl.includes("topicName=")) {
     try {
       const urlObj = new URL(targetUrl);
@@ -20,6 +21,18 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         chrome.storage.local.set({ savedChapter: savedChapter });
       }
     } catch (e) { }
+  }
+  // Xylem/Generic Breadcrumb Pattern
+  if (targetUrl && (targetUrl.includes("/library/") || targetUrl.includes("/courses/"))) {
+    chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      func: () => document.querySelector('.breadcrumb, [class*="breadcrumb"], .course-title')?.innerText || ""
+    }, (results) => {
+      if (results?.[0]?.result) {
+        savedChapter = results[0].result.split('>').pop().trim().toUpperCase();
+        chrome.storage.local.set({ savedChapter: savedChapter });
+      }
+    });
   }
 });
 
@@ -44,6 +57,10 @@ async function relayLog(type, message, detail = "") {
   } catch (e) { }
 }
 
+function logDiagnostic(msg) {
+  relayLog('INFO', msg);
+}
+
 const processedUrls = new Set();
 
 function processPdf(pdfUrl, tabId, tabTitle) {
@@ -60,22 +77,31 @@ function processPdf(pdfUrl, tabId, tabTitle) {
     processedUrls.add(pdfUrl);
     setTimeout(() => processedUrls.delete(pdfUrl), 30000);
 
-    relayLog('DETECT', `PDF Detected: ${pdfUrl.split('/').pop().split('?')[0]}`);
+    relayLog('DETECT', `Page detected: ${pdfUrl.split('/').pop().split('?')[0]}`);
 
     let pdfTopic = tabTitle || "Document";
-    if (pdfTopic === "Document" || pdfTopic === "PDF") {
-      const filename = pdfUrl.split('/').pop().split('?')[0].replace(".pdf", "");
-      if (filename.length > 5) pdfTopic = filename;
-    }
-    pdfTopic = pdfTopic.replace(".pdf", "").split('|')[0].trim();
 
-    // Fix: Only execute script if tabId is valid and not a restricted page
+    // Support for extraction from DOM (for custom viewers like Xylem)
     if (tabId && tabId > 0) {
       chrome.scripting.executeScript({
         target: { tabId: tabId },
-        func: () => document.querySelector('h1, h2, .pdf-title')?.innerText || ""
+        func: () => {
+          const links = Array.from(document.querySelectorAll('a, iframe, embed, object'));
+          const pdfLink = links.find(el => (el.href || el.src || el.data)?.toLowerCase().includes('.pdf'))?.href ||
+            links.find(el => (el.href || el.src || el.data)?.toLowerCase().includes('.pdf'))?.src ||
+            links.find(el => (el.href || el.src || el.data)?.toLowerCase().includes('.pdf'))?.data || "";
+          const title = document.querySelector('h1, h2, .pdf-title, .title, .breadcrumb-item.active, [class*="breadcrumb"]')?.innerText || "";
+          return { pdfLink, title };
+        }
       }, (results) => {
-        if (results?.[0]?.result) pdfTopic = results[0].result.split('|')[0].trim();
+        const { pdfLink, title } = results?.[0]?.result || {};
+
+        if (pdfLink && pdfLink.toLowerCase().includes('.pdf')) {
+          relayLog('DETECT', `Hidden PDF Found: ${pdfLink.split('/').pop()}`);
+          pdfUrl = pdfLink;
+        }
+
+        if (title) pdfTopic = title.split('|')[0].split('>').pop().trim();
         startUpload(pdfUrl, pdfTopic);
       });
     } else {
@@ -100,7 +126,10 @@ function startUpload(pdfUrl, pdfTopic) {
 }
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (tab.url?.toLowerCase().includes(".pdf") && (changeInfo.status === 'complete' || tab.status === 'complete')) {
+  const isPdfUrl = tab.url?.toLowerCase().includes(".pdf");
+  const isPdfViewer = tab.url?.toLowerCase().includes("/pdf-viewer") || tab.url?.toLowerCase().includes("/pdf_viewer");
+
+  if ((isPdfUrl || isPdfViewer) && (changeInfo.status === 'complete' || tab.status === 'complete')) {
     processPdf(tab.url, tabId, tab.title);
   }
 });
