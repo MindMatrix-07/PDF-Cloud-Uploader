@@ -105,8 +105,16 @@ module.exports = async (req, res) => {
 
     await uploadStream.complete;
 
-    // --- HISTORY UPLOAD REMOVED PER USER REQUEST ---
-    // History will now be managed on the client side (Extension/Dashboard)
+    await uploadStream.complete;
+
+    // --- PUSH SUCCESS TO LIVE RELAY ---
+    try {
+      await axios.post('https://pdf-cloud-uploader.vercel.app/api/relay', {
+        type: 'SUCCESS',
+        message: `Uploaded: ${fileName}`,
+        detail: `Folder: ${chapter} | Login: ${authMethod}`
+      });
+    } catch (e) { console.error('Relay fail:', e.message); }
 
     return res.status(200).json({
       success: true,
@@ -117,6 +125,15 @@ module.exports = async (req, res) => {
     });
 
   } catch (err) {
+    // --- PUSH ERROR TO LIVE RELAY ---
+    try {
+      await axios.post('https://pdf-cloud-uploader.vercel.app/api/relay', {
+        type: 'ERROR',
+        message: `Upload Failed: ${fileName || 'Unknown File'}`,
+        detail: err.message
+      });
+    } catch (e) { console.error('Relay fail:', e.message); }
+
     return res.status(500).json({
       success: false,
       error: err.message,

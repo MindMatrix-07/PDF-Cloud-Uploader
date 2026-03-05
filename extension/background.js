@@ -1,4 +1,5 @@
 const VERCEL_URL = "https://pdf-cloud-uploader.vercel.app/api/upload";
+const RELAY_URL = "https://pdf-cloud-uploader.vercel.app/api/relay";
 
 let savedChapter = "GENERAL";
 
@@ -22,15 +23,25 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
-// User-facing logging
-function logDiagnostic(msg) {
+// Centralized relay logging (Pushes to Website)
+async function relayLog(type, message, detail = "") {
+  // 1. Local logging
   const time = new Date().toLocaleTimeString();
-  const entry = `[${time}] ${msg}`;
+  const entry = `[${time}] ${message}`;
   chrome.storage.local.get(['diagLogs'], (res) => {
     let logs = res.diagLogs || [];
     logs.unshift(entry);
     chrome.storage.local.set({ diagLogs: logs.slice(0, 20) });
   });
+
+  // 2. Remote relay (to Website)
+  try {
+    fetch(RELAY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, message, detail })
+    }).catch(() => { });
+  } catch (e) { }
 }
 
 const processedUrls = new Set();
@@ -49,7 +60,7 @@ function processPdf(pdfUrl, tabId, tabTitle) {
     processedUrls.add(pdfUrl);
     setTimeout(() => processedUrls.delete(pdfUrl), 30000);
 
-    logDiagnostic(`🚀 PDF Detected: ${pdfUrl}`);
+    relayLog('DETECT', `PDF Detected: ${pdfUrl.split('/').pop().split('?')[0]}`);
 
     let pdfTopic = tabTitle || "Document";
     if (pdfTopic === "Document" || pdfTopic === "PDF") {
@@ -58,26 +69,34 @@ function processPdf(pdfUrl, tabId, tabTitle) {
     }
     pdfTopic = pdfTopic.replace(".pdf", "").split('|')[0].trim();
 
-    chrome.scripting.executeScript({
-      target: { tabId: tabId > 0 ? tabId : 0 },
-      func: () => document.querySelector('h1, h2, .pdf-title')?.innerText || ""
-    }, (results) => {
-      if (results?.[0]?.result) pdfTopic = results[0].result.split('|')[0].trim();
-
-      const finalFileName = `${pdfTopic}-${savedChapter}.pdf`.replace(/[\\/:*?"<>|]/g, "").trim();
-      logDiagnostic(`Attempting upload: ${finalFileName}`);
-
-      uploadToVercel(pdfUrl, finalFileName);
-
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'icon.png',
-        title: 'Snatching PDF...',
-        message: finalFileName,
-        priority: 1
+    // Fix: Only execute script if tabId is valid and not a restricted page
+    if (tabId && tabId > 0) {
+      chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        func: () => document.querySelector('h1, h2, .pdf-title')?.innerText || ""
+      }, (results) => {
+        if (results?.[0]?.result) pdfTopic = results[0].result.split('|')[0].trim();
+        startUpload(pdfUrl, pdfTopic);
       });
-    });
-  } catch (err) { logDiagnostic(`ERR: ${err.message}`); }
+    } else {
+      startUpload(pdfUrl, pdfTopic);
+    }
+  } catch (err) { relayLog('ERROR', `Detection Error: ${err.message}`); }
+}
+
+function startUpload(pdfUrl, pdfTopic) {
+  const finalFileName = `${pdfTopic}-${savedChapter}.pdf`.replace(/[\\/:*?"<>|]/g, "").trim();
+  relayLog('START', `Starting upload: ${finalFileName}`, `From: ${pdfUrl}`);
+
+  uploadToVercel(pdfUrl, finalFileName);
+
+  chrome.notifications.create({
+    type: 'basic',
+    iconUrl: 'icon.png',
+    title: 'Snatching PDF...',
+    message: finalFileName,
+    priority: 1
+  });
 }
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -113,19 +132,7 @@ async function uploadToVercel(pdfUrl, fileName) {
       const result = await response.json();
 
       if (result.success) {
-        logDiagnostic(`✅ SUCCESS: ${result.method} login`);
-
-        // Save to Local History
-        chrome.storage.local.get(['uploadHistory'], (hRes) => {
-          let history = hRes.uploadHistory || [];
-          history.unshift({
-            fileName: fileName,
-            method: result.method,
-            timestamp: result.timestamp,
-            chapter: result.chapter
-          });
-          chrome.storage.local.set({ uploadHistory: history.slice(0, 20) });
-        });
+        relayLog('SUCCESS', `Upload finished: ${fileName}`, `Method: ${result.method}`);
 
         chrome.notifications.create({
           type: 'basic',
@@ -135,10 +142,10 @@ async function uploadToVercel(pdfUrl, fileName) {
           priority: 2
         });
       } else {
-        logDiagnostic(`❌ FAIL: ${result.error}`);
+        relayLog('ERROR', `Server ERR: ${result.error}`);
       }
     } catch (error) {
-      logDiagnostic(`🚨 FATAL: ${error.message}`);
+      relayLog('ERROR', `Network FATAL: ${error.message}`);
     }
   });
 }
