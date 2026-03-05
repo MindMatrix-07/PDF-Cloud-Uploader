@@ -182,6 +182,16 @@
         .refresh-btn:hover {
             text-decoration: underline;
         }
+
+        .error {
+            text-align: center;
+            padding: 2rem;
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.05);
+            border-radius: 16px;
+            border: 1px dashed rgba(239, 68, 68, 0.2);
+            font-size: 0.9rem;
+        }
     </style>
 </head>
 
@@ -246,12 +256,8 @@
                         <small style="font-size: 10px; color: #ff8e8e; opacity: 0.8;">${details}</small>
                     </div>`;
                 }
-                Uploaded
-                        </div >
-                    </li >
-                `).join('');
             } catch (error) {
-                list.innerHTML = '<div class="empty-state">Failed to load history</div>';
+                historyList.innerHTML = '<div class="error">Failed to connect to API</div>';
             }
         }
 
