@@ -4,278 +4,321 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Cloud Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <title>Cloud Flow | Dashboard</title>
     <style>
         :root {
-            --bg-color: #0a0a0c;
-            --card-bg: rgba(255, 255, 255, 0.05);
-            --accent-color: #3b82f6;
-            --accent-glow: rgba(59, 130, 246, 0.5);
-            --text-primary: #ffffff;
-            --text-secondary: #94a3b8;
+            --primary: #00f2fe;
+            --secondary: #4facfe;
+            --bg: #0b0e14;
+            --card: rgba(255, 255, 255, 0.05);
+            --border: rgba(255, 255, 255, 0.1);
+            --success: #00C851;
+            --session: #aa66ff;
+            --creds: #33b5e5;
         }
 
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Outfit', sans-serif;
+            font-family: 'Segoe UI', system-ui, sans-serif;
         }
 
         body {
-            background-color: var(--bg-color);
-            color: var(--text-primary);
+            background: var(--bg);
+            color: white;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 2rem 1rem;
+            padding: 40px 20px;
+            background-image: radial-gradient(circle at 50% 50%, #1a202c 0%, #0b0e14 100%);
         }
 
-        .container {
-            width: 100%;
-            max-width: 800px;
-        }
-
-        header {
+        .header {
             text-align: center;
-            margin-bottom: 3rem;
-            position: relative;
+            margin-bottom: 40px;
         }
 
-        h1 {
-            font-size: 2.5rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-            background: linear-gradient(135deg, #fff 0%, #3b82f6 100%);
-            background-clip: text;
+        .header h1 {
+            font-size: 3rem;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
         }
 
-        .status-badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            background: var(--card-bg);
-            border-radius: 20px;
+        .system-status {
             font-size: 0.8rem;
-            color: var(--text-secondary);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .dashboard-card {
-            background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 24px;
-            padding: 2rem;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-        }
-
-        .section-title {
-            font-size: 1.25rem;
-            margin-bottom: 1.5rem;
-            display: flex;
-            justify-content: space-between;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 4px 12px;
+            border-radius: 20px;
+            display: inline-flex;
             align-items: center;
-        }
-
-        .history-list {
-            list-style: none;
-        }
-
-        .history-item {
-            background: rgba(255, 255, 255, 0.02);
-            border-radius: 16px;
-            padding: 1.25rem;
-            margin-bottom: 1rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            transition: transform 0.2s, background 0.2s;
-            border: 1px solid transparent;
-        }
-
-        .history-item:hover {
-            transform: translateY(-2px);
-            background: rgba(255, 255, 255, 0.05);
-            border-color: rgba(59, 130, 246, 0.3);
-        }
-
-        .item-info {
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
-        }
-
-        .file-name {
-            font-weight: 600;
-            font-size: 1rem;
-            color: var(--text-primary);
-        }
-
-        .file-meta {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
+            gap: 8px;
+            border: 1px solid var(--border);
+            margin-top: 10px;
         }
 
         .status-dot {
             width: 8px;
             height: 8px;
+            background: var(--success);
             border-radius: 50%;
-            background: #10b981;
-            box-shadow: 0 0 10px #10b981;
-            margin-right: 0.5rem;
+            box-shadow: 0 0 10px var(--success);
         }
 
-        .item-status {
+        .container {
+            width: 100%;
+            max-width: 700px;
+            display: grid;
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--card);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .card-title {
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: rgba(255, 255, 255, 0.5);
+            text-transform: uppercase;
+            margin-bottom: 20px;
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            font-size: 0.85rem;
-            color: #10b981;
-            background: rgba(16, 185, 129, 0.1);
-            padding: 0.4rem 0.8rem;
+        }
+
+        /* Settings Area */
+        .session-input {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            padding: 12px 15px;
             border-radius: 12px;
+            color: white;
+            width: 100%;
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+            transition: border 0.3s;
+        }
+
+        .session-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .btn {
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            border: none;
+            padding: 12px 25px;
+            border-radius: 12px;
+            color: #000;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, opacity 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            opacity: 0.9;
+        }
+
+        /* History Area */
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .history-item {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 15px;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid transparent;
+            transition: background 0.2s;
+        }
+
+        .history-item:hover {
+            background: rgba(255, 255, 255, 0.03);
+            border-color: var(--border);
+        }
+
+        .file-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .file-name {
+            font-weight: 500;
+            font-size: 1rem;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-meta {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.4);
+            display: flex;
+            gap: 10px;
+        }
+
+        .badge {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .badge-session {
+            background: var(--session);
+            color: white;
+        }
+
+        .badge-creds {
+            background: var(--creds);
+            color: white;
+        }
+
+        .badge-local {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.5);
         }
 
         .empty-state {
             text-align: center;
-            padding: 3rem;
-            color: var(--text-secondary);
-        }
-
-        @keyframes pulse {
-            0% {
-                transform: scale(1);
-                opacity: 1;
-            }
-
-            50% {
-                transform: scale(1.1);
-                opacity: 0.7;
-            }
-
-            100% {
-                transform: scale(1);
-                opacity: 1;
-            }
-        }
-
-        .live-indicator {
-            width: 6px;
-            height: 6px;
-            background: #ef4444;
-            border-radius: 50%;
-            margin-right: 8px;
-            animation: pulse 2s infinite;
+            padding: 40px 0;
+            color: rgba(255, 255, 255, 0.3);
+            font-style: italic;
         }
 
         .refresh-btn {
-            background: transparent;
-            border: none;
-            color: var(--accent-color);
+            color: var(--primary);
+            text-decoration: none;
+            font-size: 0.8rem;
             cursor: pointer;
-            font-size: 0.9rem;
-            font-weight: 600;
         }
 
-        .refresh-btn:hover {
-            text-decoration: underline;
+        /* Notifications */
+        #toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--success);
+            color: black;
+            padding: 12px 25px;
+            border-radius: 12px;
+            font-weight: bold;
+            display: none;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
         }
 
-        .error {
-            text-align: center;
-            padding: 2rem;
-            color: #ef4444;
-            background: rgba(239, 68, 68, 0.05);
-            border-radius: 16px;
-            border: 1px dashed rgba(239, 68, 68, 0.2);
-            font-size: 0.9rem;
+        @media (max-width: 600px) {
+            .header h1 {
+                font-size: 2.2rem;
+            }
+
+            .history-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <header>
-            <h1>Cloud Flow</h1>
-            <div class="status-badge"
-                style="display: flex; align-items: center; justify-content: center; margin: 0 auto; width: fit-content;">
-                <div class="live-indicator"></div>
-                System Active
-            </div>
-        </header>
 
-        <div class="dashboard-card">
-            <div class="section-title">
-                Recent Uploads
-                <button class="refresh-btn" onclick="fetchHistory()">Refresh</button>
-            </div>
-
-            <ul id="history-list" class="history-list">
-                <!-- Data will be loaded here -->
-            </ul>
+    <div class="header">
+        <h1>Cloud Flow</h1>
+        <div class="system-status">
+            <span class="status-dot"></span>
+            System Active
         </div>
     </div>
 
+    <div class="container">
+        <!-- Session Manager -->
+        <div class="card">
+            <div class="card-title">Account Settings (Local)</div>
+            <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin-bottom: 15px;">
+                Enter your MEGA Session ID here. It stays in your browser and is only used to sync this dashboard's
+                history.
+            </p>
+            <input type="password" id="sessionInput" class="session-input" placeholder="Paste MEGA Session ID...">
+            <button onclick="saveSession()" class="btn">Update Session ID</button>
+        </div>
+
+        <!-- Recent Uploads -->
+        <div class="card">
+            <div class="card-title">
+                Recent Activity
+                <span class="refresh-btn" onclick="fetchStatus()">Check Status</span>
+            </div>
+            <div id="historyList" class="history-list">
+                <div class="empty-state">No history found on MEGA. History is now stored in your extension.</div>
+            </div>
+        </div>
+
+        <div id="env-diagnostic"
+            style="font-size: 0.7rem; color: rgba(255,255,255,0.2); text-align: center; margin-top: 20px;">
+            Connecting to backend...
+        </div>
+    </div>
+
+    <div id="toast">Settings Saved!</div>
+
     <script>
-        const historyList = document.getElementById('history-list');
+        const API_URL = window.location.origin;
 
-        function renderHistory(history) {
-            if (history.length === 0) {
-                historyList.innerHTML = '<div class="empty-state">No uploads yet. Open a PDF to start!</div>';
-                return;
-            }
+        // Load Session on start
+        const savedSid = localStorage.getItem('MEGA_SESSION');
+        if (savedSid) document.getElementById('sessionInput').value = savedSid;
 
-            historyList.innerHTML = history.map(item => `
-                <li class="history-item">
-                    <div class="item-info">
-                        <span class="file-name">${item.fileName}</span>
-                        <span class="file-meta">Folder: ${item.chapter} • ${new Date(item.timestamp).toLocaleTimeString()}</span>
-                    </div>
-                    <div class="item-status">
-                        <div class="status-dot"></div>
-                        Uploaded
-                    </div>
-                </li>
-            `).join('');
+        function saveSession() {
+            const sid = document.getElementById('sessionInput').value.trim();
+            localStorage.setItem('MEGA_SESSION', sid);
+            showToast();
+            fetchStatus();
         }
 
-        async function fetchHistory() {
+        function showToast() {
+            const t = document.getElementById('toast');
+            t.style.display = 'block';
+            setTimeout(() => t.style.display = 'none', 3000);
+        }
+
+        async function fetchStatus() {
+            const diag = document.getElementById('env-diagnostic');
             try {
-                const response = await fetch('/api/history');
-                const data = await response.json();
+                const res = await fetch(`${API_URL}/api/history`);
+                const data = await res.json();
 
-                if (response.ok) {
-                    renderHistory(data);
-                } else {
-                    const errorMsg = data.error || 'Unknown Error';
-                    const details = data.details || 'Check Vercel Environment Variables';
-                    const status = data.envStatus ? `
-                        <div style="margin-top: 10px; font-size: 11px; text-align: left; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px;">
-                            <b>Env Status:</b><br>
-                            SESSION: ${data.envStatus.MEGA_SESSION}<br>
-                            EMAIL: ${data.envStatus.MEGA_EMAIL}<br>
-                            PASS: ${data.envStatus.MEGA_PASS}
-                        </div>
-                    ` : '';
-
-                    historyList.innerHTML = `<div class="error">
-                        ${errorMsg}<br>
-                        <small style="font-size: 10px; color: #ff8e8e; opacity: 0.8;">${details}</small>
-                        ${status}
-                    </div>`;
+                if (data.status === 'online') {
+                    diag.innerHTML = `Backend: ${data.status} | Session: ${data.envStatus.MEGA_SESSION} | Mode: ${data.envStatus.HISTORY_MODE}`;
                 }
-            } catch (error) {
-                historyList.innerHTML = '<div class="error">Failed to connect to API</div>';
+            } catch (e) {
+                diag.innerHTML = 'Backend Connection Failed';
             }
         }
 
-        // Initial load
-        fetchHistory();
-        // Auto refresh every 30 seconds
-        setInterval(fetchHistory, 30000);
+        // Initialize
+        fetchStatus();
+
+        // Note: Real history is now in extension popup. 
+        // This dashboard serves as the System Master and Config center.
     </script>
 </body>
 

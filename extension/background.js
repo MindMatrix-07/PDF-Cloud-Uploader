@@ -1,16 +1,13 @@
-const VERCEL_URL = "https://pdf-cloud-uploader.vercel.app/api/upload"; // REPLACE WITH YOUR VERCEL URL
+const VERCEL_URL = "https://pdf-cloud-uploader.vercel.app/api/upload";
 
-let savedChapter = "GENERAL"; // Default fallback
+let savedChapter = "GENERAL";
 
-// Load saved chapter from storage on startup
+// Startup Data Load
 chrome.storage.local.get(['savedChapter'], (res) => {
-  if (res.savedChapter) {
-    savedChapter = res.savedChapter;
-    console.log("Restored Chapter Memory:", savedChapter);
-  }
+  if (res.savedChapter) savedChapter = res.savedChapter;
 });
 
-// 1. Listen for the Chapter Name in every URL change
+// Listener for Chapter Discovery
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   const targetUrl = changeInfo.url || tab.url;
   if (targetUrl && targetUrl.includes("topicName=")) {
@@ -18,20 +15,17 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       const urlObj = new URL(targetUrl);
       const topic = urlObj.searchParams.get("topicName");
       if (topic) {
-        // Clean the name: Remove (2026), replace %20 with space
         savedChapter = decodeURIComponent(topic).replace(/\(\d{4}\)/g, "").trim().toUpperCase();
         chrome.storage.local.set({ savedChapter: savedChapter });
-        console.log("Memory Locked On:", savedChapter);
       }
     } catch (e) { }
   }
 });
 
-// Helper to log diagnostics for the user
+// User-facing logging
 function logDiagnostic(msg) {
   const time = new Date().toLocaleTimeString();
   const entry = `[${time}] ${msg}`;
-  console.log(entry);
   chrome.storage.local.get(['diagLogs'], (res) => {
     let logs = res.diagLogs || [];
     logs.unshift(entry);
@@ -39,87 +33,64 @@ function logDiagnostic(msg) {
   });
 }
 
-// Cache to prevent duplicate uploads
 const processedUrls = new Set();
 
 function processPdf(pdfUrl, tabId, tabTitle) {
   try {
-    if (!pdfUrl) return;
+    if (!pdfUrl || processedUrls.has(pdfUrl)) return;
 
-    // SUPPORT FOR WRAPPERS (e.g., PW viewer)
+    // Support for PDF Wrappers
     try {
       const urlObj = new URL(pdfUrl);
-      const nestedUrl = urlObj.searchParams.get('pdf_url') || urlObj.searchParams.get('file') || urlObj.searchParams.get('url');
-      if (nestedUrl && nestedUrl.toLowerCase().includes('.pdf')) {
-        logDiagnostic(`Extracted nested PDF: ${nestedUrl}`);
-        pdfUrl = nestedUrl;
-      }
+      const nestedUrl = urlObj.searchParams.get('pdf_url') || urlObj.searchParams.get('file');
+      if (nestedUrl && nestedUrl.toLowerCase().includes('.pdf')) pdfUrl = nestedUrl;
     } catch (e) { }
 
-    // Check if we already processed this URL recently to avoid duplicates
-    if (processedUrls.has(pdfUrl)) return;
     processedUrls.add(pdfUrl);
-    setTimeout(() => processedUrls.delete(pdfUrl), 30000); // 30s cooldown
+    setTimeout(() => processedUrls.delete(pdfUrl), 30000);
 
     logDiagnostic(`🚀 PDF Detected: ${pdfUrl}`);
 
-    // Try to get title from tab title first
     let pdfTopic = tabTitle || "Document";
-    if (pdfTopic === "Document" || pdfTopic === "PDF" || pdfTopic === "PDF-Document") {
-      try {
-        const filename = pdfUrl.split('/').pop().split('?')[0].replace(".pdf", "");
-        if (filename && filename.length > 5) pdfTopic = filename;
-      } catch (e) { }
+    if (pdfTopic === "Document" || pdfTopic === "PDF") {
+      const filename = pdfUrl.split('/').pop().split('?')[0].replace(".pdf", "");
+      if (filename.length > 5) pdfTopic = filename;
     }
     pdfTopic = pdfTopic.replace(".pdf", "").split('|')[0].trim();
 
     chrome.scripting.executeScript({
       target: { tabId: tabId > 0 ? tabId : 0 },
-      func: () => document.querySelector('h1, h2, .pdf-title, .header-title')?.innerText || ""
+      func: () => document.querySelector('h1, h2, .pdf-title')?.innerText || ""
     }, (results) => {
-      if (chrome.runtime.lastError) {
-        logDiagnostic(`Scripting Note: Using tab/URL title (page restricted)`);
-      } else if (results && results[0].result) {
-        pdfTopic = results[0].result.split('|')[0].trim();
-        logDiagnostic(`Extracted Topic: ${pdfTopic}`);
-      }
+      if (results?.[0]?.result) pdfTopic = results[0].result.split('|')[0].trim();
 
       const finalFileName = `${pdfTopic}-${savedChapter}.pdf`.replace(/[\\/:*?"<>|]/g, "").trim();
-      logDiagnostic(`FINAL NAME: ${finalFileName}`);
+      logDiagnostic(`Attempting upload: ${finalFileName}`);
 
-      chrome.storage.local.set({ lastUrl: pdfUrl, lastFileName: finalFileName });
       uploadToVercel(pdfUrl, finalFileName);
 
       chrome.notifications.create({
         type: 'basic',
         iconUrl: 'icon.png',
-        title: 'PDF Snatched!',
-        message: `Sending ${finalFileName} to MEGA...`,
-        priority: 2
+        title: 'Snatching PDF...',
+        message: finalFileName,
+        priority: 1
       });
     });
-  } catch (err) {
-    logDiagnostic(`INTERNAL ERR: ${err.message}`);
-  }
+  } catch (err) { logDiagnostic(`ERR: ${err.message}`); }
 }
 
-// 2a. Navigation-based detection
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (tab.url && tab.url.toLowerCase().includes(".pdf")) {
-    if (changeInfo.status === 'complete' || tab.status === 'complete') {
-      logDiagnostic(`Tab detection hit: ${tab.url}`);
-      processPdf(tab.url, tabId, tab.title);
-    }
+  if (tab.url?.toLowerCase().includes(".pdf") && (changeInfo.status === 'complete' || tab.status === 'complete')) {
+    processPdf(tab.url, tabId, tab.title);
   }
 });
 
-// 2b. Header-based detection
 chrome.webRequest.onHeadersReceived.addListener(
   (details) => {
     if (details.type === 'main_frame' || details.type === 'sub_frame') {
       const contentType = details.responseHeaders.find(h => h.name.toLowerCase() === 'content-type')?.value || "";
-      if (contentType.toLowerCase().includes('application/pdf') || details.url.toLowerCase().includes(".pdf")) {
-        logDiagnostic(`Header detection hit: ${details.url} (${contentType})`);
+      if (contentType.toLowerCase().includes('application/pdf')) {
         processPdf(details.url, details.tabId, "PDF-Document");
       }
     }
@@ -129,29 +100,45 @@ chrome.webRequest.onHeadersReceived.addListener(
 );
 
 async function uploadToVercel(pdfUrl, fileName) {
-  logDiagnostic(`Contacting server: ${VERCEL_URL}`);
-  try {
-    const response = await fetch(VERCEL_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pdfUrl, fileName })
-    });
+  chrome.storage.local.get(['megaSession'], async (res) => {
+    const sessionToUse = res.megaSession || "";
 
-    const result = await response.json();
-    logDiagnostic(`Server responded success=${result.success}`);
-
-    if (result.success) {
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'icon.png',
-        title: 'MEGA Upload Done!',
-        message: `Saved to: ${result.chapter}`,
-        priority: 2
+    try {
+      const response = await fetch(VERCEL_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdfUrl, fileName, megaSession: sessionToUse })
       });
-    } else {
-      logDiagnostic(`ERR: ${result.error}`);
+
+      const result = await response.json();
+
+      if (result.success) {
+        logDiagnostic(`✅ SUCCESS: ${result.method} login`);
+
+        // Save to Local History
+        chrome.storage.local.get(['uploadHistory'], (hRes) => {
+          let history = hRes.uploadHistory || [];
+          history.unshift({
+            fileName: fileName,
+            method: result.method,
+            timestamp: result.timestamp,
+            chapter: result.chapter
+          });
+          chrome.storage.local.set({ uploadHistory: history.slice(0, 20) });
+        });
+
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icon.png',
+          title: 'Cloud Success!',
+          message: `Saved to: ${result.chapter} (${result.method})`,
+          priority: 2
+        });
+      } else {
+        logDiagnostic(`❌ FAIL: ${result.error}`);
+      }
+    } catch (error) {
+      logDiagnostic(`🚨 FATAL: ${error.message}`);
     }
-  } catch (error) {
-    logDiagnostic(`FATAL: ${error.message}`);
-  }
+  });
 }

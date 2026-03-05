@@ -11,12 +11,17 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { pdfUrl, fileName } = req.body;
+  // 1. Get Inputs (Accept dynamic session from body)
+  const { pdfUrl, fileName, megaSession: dynamicSession } = req.body;
   if (!pdfUrl || !fileName) return res.status(400).json({ error: 'Missing pdfUrl or fileName' });
 
+  // 2. Get and Clean Env Vars (Credentials stay in Env)
   const megaEmail = (process.env.MEGA_EMAIL || "").trim();
   const megaPassword = (process.env.MEGA_PASSWORD || "").trim();
-  const megaSession = (process.env.MEGA_SESSION || "").trim();
+
+  // Prioritize dynamic session from request, then fall back to Env (if not disabled)
+  const envSession = (process.env.MEGA_SESSION || "").trim();
+  const megaSession = (dynamicSession || envSession || "").trim();
 
   const hasSession = megaSession && megaSession !== 'undefined' && megaSession !== 'null';
   const hasCreds = megaEmail && megaEmail !== 'undefined' && megaPassword && megaPassword !== 'undefined';
@@ -24,7 +29,8 @@ module.exports = async (req, res) => {
   const envStatus = {
     MEGA_SESSION: hasSession ? `Found (${megaSession.substring(0, 8)}...)` : 'MISSING',
     MEGA_EMAIL: megaEmail ? 'Found' : 'MISSING',
-    MEGA_PASS: megaPassword ? 'Found' : 'MISSING'
+    MEGA_PASS: megaPassword ? 'Found' : 'MISSING',
+    SESSION_SOURCE: dynamicSession ? 'DASHBOARD/EXTENSION' : 'ENV'
   };
 
   let storage;
@@ -43,7 +49,7 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Phase 2: Try Credentials Fallback
+    // Phase 2: Try Credentials Fallback (Env based)
     if (hasCreds) {
       try {
         console.log('Trying MEGA_EMAIL/PASS...');
@@ -63,7 +69,7 @@ module.exports = async (req, res) => {
     if (!loginSuccess) {
       return res.status(500).json({
         error: "MEGA Authentication Failed",
-        details: "Both Session ID and Email/Pass were rejected by MEGA.",
+        details: "Login rejected by MEGA. Check your Session ID or Credentials.",
         envStatus: envStatus
       });
     }
@@ -74,9 +80,11 @@ module.exports = async (req, res) => {
       ? parts.slice(1).join('-').replace(/\.pdf$/i, '').trim()
       : fileName.replace(/\.pdf$/i, '').trim();
 
+    // Find/Create Folder
     let folder = storage.root.children.find(item => item.name === chapter && item.directory);
     if (!folder) folder = await storage.mkdir(chapter);
 
+    // Fetch PDF
     const pdfResponse = await axios({
       method: 'get',
       url: pdfUrl,
@@ -89,6 +97,7 @@ module.exports = async (req, res) => {
       timeout: 10000
     });
 
+    // Upload
     const uploadStream = folder.upload({
       name: fileName,
       size: pdfResponse.headers['content-length'] ? parseInt(pdfResponse.headers['content-length']) : undefined
@@ -96,15 +105,16 @@ module.exports = async (req, res) => {
 
     await uploadStream.complete;
 
-    try {
-      let historyFile = storage.root.children.find(item => item.name === 'history.json' && !item.directory);
-      let history = historyFile ? JSON.parse((await historyFile.downloadBuffer()).toString()) : [];
-      history.unshift({ fileName, chapter, timestamp: new Date().toISOString(), status: 'Success' });
-      if (historyFile) await historyFile.delete();
-      await storage.root.upload('history.json', JSON.stringify(history.slice(0, 20))).complete;
-    } catch (hErr) { console.error('History update failed', hErr); }
+    // --- HISTORY UPLOAD REMOVED PER USER REQUEST ---
+    // History will now be managed on the client side (Extension/Dashboard)
 
-    return res.status(200).json({ success: true, method: authMethod, chapter, fileName });
+    return res.status(200).json({
+      success: true,
+      method: authMethod,
+      chapter,
+      fileName,
+      timestamp: new Date().toISOString()
+    });
 
   } catch (err) {
     return res.status(500).json({
