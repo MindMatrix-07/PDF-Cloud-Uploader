@@ -1,6 +1,14 @@
 const VERCEL_URL = "https://pdf-cloud-uploader.vercel.app/api/upload"; // REPLACE WITH YOUR VERCEL URL
 
-let savedChapter = "UNITS AND MEASUREMENTS"; // Default fallback
+let savedChapter = "GENERAL"; // Default fallback
+
+// Load saved chapter from storage on startup
+chrome.storage.local.get(['savedChapter'], (res) => {
+  if (res.savedChapter) {
+    savedChapter = res.savedChapter;
+    console.log("Restored Chapter Memory:", savedChapter);
+  }
+});
 
 // 1. Listen for the Chapter Name in every URL change
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -12,6 +20,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       if (topic) {
         // Clean the name: Remove (2026), replace %20 with space
         savedChapter = decodeURIComponent(topic).replace(/\(\d{4}\)/g, "").trim().toUpperCase();
+        chrome.storage.local.set({ savedChapter: savedChapter });
         console.log("Memory Locked On:", savedChapter);
       }
     } catch (e) { }
@@ -56,6 +65,13 @@ function processPdf(pdfUrl, tabId, tabTitle) {
 
   // Try to get title from tab title first
   let pdfTopic = tabTitle || "Document";
+  if (pdfTopic === "Document" || pdfTopic === "PDF" || pdfTopic === "PDF-Document") {
+    // If title is generic, try to get from filename in URL
+    try {
+      const filename = pdfUrl.split('/').pop().split('?')[0].replace(".pdf", "");
+      if (filename && filename.length > 5) pdfTopic = filename;
+    } catch (e) { }
+  }
   pdfTopic = pdfTopic.replace(".pdf", "").split('|')[0].trim();
 
   chrome.scripting.executeScript({
