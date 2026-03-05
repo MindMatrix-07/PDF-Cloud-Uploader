@@ -30,7 +30,7 @@ module.exports = async (req, res) => {
                 storage = await new Storage({ session: megaSession }).ready;
                 if (storage.root) return true;
             } catch (e) {
-                console.warn("Session failed in history check</strong>");
+                console.warn("Session failed in history check");
             }
         }
         if (hasCreds) {
@@ -39,7 +39,7 @@ module.exports = async (req, res) => {
                 storage = await new Storage({ email: megaEmail, password: megaPassword, autologin: true }).ready;
                 if (storage.root) return true;
             } catch (e) {
-                console.error("Creds failed in history check</strong>");
+                console.error("Creds failed in history check");
             }
         }
         return false;
