@@ -23,6 +23,15 @@ chrome.storage.local.get(['savedChapter'], (res) => {
   if (res.savedChapter) savedChapter = res.savedChapter;
 });
 
+// Listen for chapter name from content.js (page heading capture)
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.type === 'SET_CHAPTER' && message.chapter) {
+    savedChapter = message.chapter;
+    chrome.storage.local.set({ savedChapter: message.chapter });
+    console.log('[Snatcher BG] Chapter updated from page:', message.chapter);
+  }
+});
+
 // Helper to log diagnostics for the user
 function logDiagnostic(msg) {
   const time = new Date().toLocaleTimeString();

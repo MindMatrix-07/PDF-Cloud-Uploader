@@ -1,51 +1,131 @@
-// content.js — Runs ONLY on xylem.live pages
-// Handles: (1) Auto-click NOTE tab, (2) After PDF open detected, double-press back
-// COMPLETELY SEPARATE from background.js — does not interfere
+// content.js — Runs on xylem.live and pw.live pages
+// SEPARATE from background.js — 3 independent features
 
 (function () {
-    // Check if extension is enabled first
+
+    // ── CHECK ENABLED ────────────────────────────────────────────────
     chrome.storage.local.get(['extensionEnabled'], (res) => {
-        if (res.extensionEnabled === false) return; // Disabled — do nothing
-        initContentScript();
+        if (res.extensionEnabled === false) return;
+        init();
     });
 
-    function initContentScript() {
-        // --- FEATURE 1: Auto-click the NOTE tab ---
-        // Runs whenever we're on a batch/topic page
-        function clickNoteTab() {
-            // Match any tab/button with exact text "NOTE"
-            const allTabs = Array.from(document.querySelectorAll('button, a, [role="tab"], .tab, li'));
-            const noteTab = allTabs.find(el => el.innerText?.trim() === 'NOTE');
-            if (noteTab && !noteTab.classList.contains('active') && !noteTab.classList.contains('selected')) {
-                noteTab.click();
-                console.log('[Snatcher] NOTE tab auto-clicked');
+    function init() {
+        // Run all features
+        autoClickNoteTab();
+        captureChapterName();
+        interceptPdfLinks();
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────
+    // FEATURE 1: Auto-click NOTE tab
+    // Xylem is a React SPA — tabs render async, so we poll aggressively
+    // ─────────────────────────────────────────────────────────────────
+    function autoClickNoteTab() {
+        let attempts = 0;
+        const maxAttempts = 30; // 15 seconds max
+
+        function tryClick() {
+            if (attempts >= maxAttempts) return;
+            attempts++;
+
+            // Find any button/link whose visible text is exactly "NOTE"
+            const allClickable = document.querySelectorAll('button, a, [role="tab"], li, span, div');
+            for (const el of allClickable) {
+                if (el.innerText?.trim() === 'NOTE') {
+                    // Make sure it's visible and not already selected
+                    const isActive = el.classList.contains('active') ||
+                        el.getAttribute('aria-selected') === 'true' ||
+                        el.classList.contains('selected') ||
+                        el.style.color === 'rgb(0, 150, 255)';
+                    if (!isActive) {
+                        el.click();
+                        console.log('[Snatcher] NOTE tab clicked');
+                    }
+                    return; // Found it, stop polling
+                }
+            }
+            // Not found yet, try again in 500ms
+            setTimeout(tryClick, 500);
+        }
+
+        tryClick();
+
+        // Also re-run on SPA route changes (Xylem uses client-side routing)
+        let lastUrl = location.href;
+        setInterval(() => {
+            if (location.href !== lastUrl) {
+                lastUrl = location.href;
+                attempts = 0; // Reset and try again on page change
+                setTimeout(tryClick, 800); // Give React time to render
+            }
+        }, 500);
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────
+    // FEATURE 2: Capture Chapter name from page heading
+    // Xylem shows the chapter as a big h1/h2 — we read it and save it
+    // ─────────────────────────────────────────────────────────────────
+    function captureChapterName() {
+        function tryCapture() {
+            // Matches "UNITS AND MEASUREMENTS (2026)" — strip the year
+            const heading = document.querySelector('h1, h2, .batch-name, [class*="title"], [class*="heading"]');
+            if (heading) {
+                const text = heading.innerText.replace(/\(\d{4}\)/g, '').trim().toUpperCase();
+                if (text && text.length > 3 && text !== 'GENERAL') {
+                    chrome.storage.local.set({ savedChapter: text });
+                    chrome.runtime.sendMessage({ type: 'SET_CHAPTER', chapter: text }).catch(() => { });
+                    console.log('[Snatcher] Chapter set:', text);
+                }
             }
         }
 
-        // Try immediately on page load
-        clickNoteTab();
+        tryCapture();
+        setTimeout(tryCapture, 1500);
+        setTimeout(tryCapture, 3000);
 
-        // Also try after a short delay (some pages render tabs after JS runs)
-        setTimeout(clickNoteTab, 1200);
-        setTimeout(clickNoteTab, 2500);
-
-        // Watch for DOM changes (SPA navigation within Xylem)
-        const observer = new MutationObserver(() => {
-            clickNoteTab();
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-
-        // --- FEATURE 2: After PDF is detected (background sends message), double-press Back ---
-        chrome.runtime.onMessage.addListener((message) => {
-            if (message.type === 'PDF_DETECTED_GO_BACK') {
-                console.log('[Snatcher] PDF detected — going back in 5s');
-                setTimeout(() => {
-                    history.back();
-                    // Second back press after a brief moment
-                    setTimeout(() => history.back(), 500);
-                    console.log('[Snatcher] Double-back executed');
-                }, 5000);
+        // Re-capture on SPA navigation
+        let lastUrl = location.href;
+        setInterval(() => {
+            if (location.href !== lastUrl) {
+                lastUrl = location.href;
+                setTimeout(tryCapture, 1200);
             }
-        });
+        }, 500);
     }
+
+
+    // ─────────────────────────────────────────────────────────────────
+    // FEATURE 3: Intercept PDF link clicks → go back after 5 seconds
+    // We attach to links BEFORE they navigate, so we can still fire back
+    // ─────────────────────────────────────────────────────────────────
+    function interceptPdfLinks() {
+        let backScheduled = false;
+
+        function attachListeners() {
+            const links = document.querySelectorAll('a[href*=".pdf"], a[href*="pdf-viewer"], a[href*="pdf_viewer"], a[href*="pdf_url"]');
+            links.forEach(link => {
+                if (link._snatched) return;
+                link._snatched = true;
+                link.addEventListener('click', () => {
+                    if (backScheduled) return;
+                    backScheduled = true;
+                    console.log('[Snatcher] PDF link clicked — back in 5s');
+                    setTimeout(() => {
+                        history.back();
+                        setTimeout(() => {
+                            history.back();
+                            backScheduled = false;
+                        }, 600);
+                    }, 5000);
+                });
+            });
+        }
+
+        // Run now, and keep scanning as React renders new links
+        attachListeners();
+        setInterval(attachListeners, 1500);
+    }
+
 })();
