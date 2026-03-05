@@ -69,16 +69,17 @@ module.exports = async (req, res) => {
   }
 
   try {
-    let storageOptions;
+    let storage;
     if (hasSession) {
       console.log('Attempting login via MEGA_SESSION');
-      storageOptions = { session: megaSession, autologin: true };
+      // DO NOT use autologin with session, it triggers an email check bug
+      storage = new Storage({ session: megaSession });
     } else {
       console.log('Attempting login via MEGA_EMAIL');
-      storageOptions = { email: megaEmail, password: megaPassword, autologin: true };
+      storage = new Storage({ email: megaEmail, password: megaPassword, autologin: true });
     }
 
-    const storage = await new Storage(storageOptions).ready;
+    await storage.ready;
     console.log('Login successful');
     if (!storage.root) throw new Error("MEGA storage root is not accessible.");
 

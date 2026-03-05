@@ -34,11 +34,15 @@ module.exports = async (req, res) => {
     }
 
     try {
-        const storageOptions = hasSession
-            ? { session: megaSession, autologin: true }
-            : { email: megaEmail, password: megaPassword, autologin: true };
+        let storage;
+        if (hasSession) {
+            // DO NOT use autologin with session, it triggers an email check bug
+            storage = new Storage({ session: megaSession });
+        } else {
+            storage = new Storage({ email: megaEmail, password: megaPassword, autologin: true });
+        }
 
-        const storage = await new Storage(storageOptions).ready;
+        await storage.ready;
 
         let historyFile = storage.root.children.find(item => item.name === 'history.json' && !item.directory);
 
