@@ -100,10 +100,9 @@ module.exports = async (req, res) => {
     // Upload
     const uploadStream = folder.upload({
       name: fileName,
-      size: pdfResponse.headers['content-length'] ? parseInt(pdfResponse.headers['content-length']) : undefined
+      size: pdfResponse.headers['content-length'] ? parseInt(pdfResponse.headers['content-length']) : undefined,
+      allowUploadBuffering: true
     }, pdfResponse.data);
-
-    await uploadStream.complete;
 
     await uploadStream.complete;
 
