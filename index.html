@@ -252,9 +252,19 @@
                 } else {
                     const errorMsg = data.error || 'Unknown Error';
                     const details = data.details || 'Check Vercel Environment Variables';
+                    const status = data.envStatus ? `
+                        <div style="margin-top: 10px; font-size: 11px; text-align: left; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px;">
+                            <b>Env Status:</b><br>
+                            SESSION: ${data.envStatus.MEGA_SESSION}<br>
+                            EMAIL: ${data.envStatus.MEGA_EMAIL}<br>
+                            PASS: ${data.envStatus.MEGA_PASS}
+                        </div>
+                    ` : '';
+
                     historyList.innerHTML = `<div class="error">
                         ${errorMsg}<br>
                         <small style="font-size: 10px; color: #ff8e8e; opacity: 0.8;">${details}</small>
+                        ${status}
                     </div>`;
                 }
             } catch (error) {
