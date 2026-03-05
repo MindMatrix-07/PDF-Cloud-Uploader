@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -59,7 +60,7 @@
             border-radius: 20px;
             font-size: 0.8rem;
             color: var(--text-secondary);
-            border: 1px solid rgba(255,255,255,0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .dashboard-card {
@@ -144,9 +145,20 @@
         }
 
         @keyframes pulse {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.1); opacity: 0.7; }
-            100% { transform: scale(1); opacity: 1; }
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.1);
+                opacity: 0.7;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
         }
 
         .live-indicator {
@@ -170,14 +182,15 @@
         .refresh-btn:hover {
             text-decoration: underline;
         }
-
     </style>
 </head>
+
 <body>
     <div class="container">
         <header>
             <h1>Cloud Flow</h1>
-            <div class="status-badge" style="display: flex; align-items: center; justify-content: center; margin: 0 auto; width: fit-content;">
+            <div class="status-badge"
+                style="display: flex; align-items: center; justify-content: center; margin: 0 auto; width: fit-content;">
                 <div class="live-indicator"></div>
                 System Active
             </div>
@@ -188,7 +201,7 @@
                 Recent Uploads
                 <button class="refresh-btn" onclick="fetchHistory()">Refresh</button>
             </div>
-            
+
             <ul id="history-list" class="history-list">
                 <!-- Data will be loaded here -->
             </ul>
@@ -196,28 +209,46 @@
     </div>
 
     <script>
+        const historyList = document.getElementById('history-list');
+
+        function renderHistory(history) {
+            if (history.length === 0) {
+                historyList.innerHTML = '<div class="empty-state">No uploads yet. Open a PDF to start!</div>';
+                return;
+            }
+
+            historyList.innerHTML = history.map(item => `
+                <li class="history-item">
+                    <div class="item-info">
+                        <span class="file-name">${item.fileName}</span>
+                        <span class="file-meta">Folder: ${item.chapter} • ${new Date(item.timestamp).toLocaleTimeString()}</span>
+                    </div>
+                    <div class="item-status">
+                        <div class="status-dot"></div>
+                        Uploaded
+                    </div>
+                </li>
+            `).join('');
+        }
+
         async function fetchHistory() {
-            const list = document.getElementById('history-list');
             try {
                 const response = await fetch('/api/history');
-                const history = await response.json();
+                const data = await response.json();
 
-                if (history.length === 0) {
-                    list.innerHTML = '<div class="empty-state">No uploads yet. Open a PDF to start!</div>';
-                    return;
+                if (response.ok) {
+                    renderHistory(data);
+                } else {
+                    const errorMsg = data.error || 'Unknown Error';
+                    const details = data.details || 'Check Vercel Environment Variables';
+                    historyList.innerHTML = `<div class="error">
+                        ${errorMsg}<br>
+                        <small style="font-size: 10px; color: #ff8e8e; opacity: 0.8;">${details}</small>
+                    </div>`;
                 }
-
-                list.innerHTML = history.map(item => `
-                    <li class="history-item">
-                        <div class="item-info">
-                            <span class="file-name">${item.fileName}</span>
-                            <span class="file-meta">Folder: ${item.chapter} • ${new Date(item.timestamp).toLocaleTimeString()}</span>
-                        </div>
-                        <div class="item-status">
-                            <div class="status-dot"></div>
-                            Uploaded
-                        </div>
-                    </li>
+                Uploaded
+                        </div >
+                    </li >
                 `).join('');
             } catch (error) {
                 list.innerHTML = '<div class="empty-state">Failed to load history</div>';
@@ -230,4 +261,5 @@
         setInterval(fetchHistory, 30000);
     </script>
 </body>
+
 </html>
