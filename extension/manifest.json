@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Khazana PDF Downloader",
-  "version": "1.5.6",
+  "version": "1.5.4",
   "permissions": [
     "webRequest",
     "storage",
@@ -17,19 +17,6 @@
   "background": {
     "service_worker": "background.js"
   },
-  "content_scripts": [
-    {
-      "matches": [
-        "*://*.xylem.live/*",
-        "*://*.pw.live/*",
-        "*://samsung-pre-prod.pw.live/*"
-      ],
-      "js": [
-        "content.js"
-      ],
-      "run_at": "document_idle"
-    }
-  ],
   "action": {
     "default_popup": "popup.html"
   }

@@ -23,15 +23,6 @@ chrome.storage.local.get(['savedChapter'], (res) => {
   if (res.savedChapter) savedChapter = res.savedChapter;
 });
 
-// Listen for chapter name from content.js (page heading capture)
-chrome.runtime.onMessage.addListener((message) => {
-  if (message.type === 'SET_CHAPTER' && message.chapter) {
-    savedChapter = message.chapter;
-    chrome.storage.local.set({ savedChapter: message.chapter });
-    console.log('[Snatcher BG] Chapter updated from page:', message.chapter);
-  }
-});
-
 // Helper to log diagnostics for the user
 function logDiagnostic(msg) {
   const time = new Date().toLocaleTimeString();
@@ -50,18 +41,8 @@ const processedUrls = new Set();
 function processPdf(pdfUrl, tabId, tabTitle) {
   if (!pdfUrl) return;
 
-  // Check if extension is enabled (toggle in popup)
-  chrome.storage.local.get(['extensionEnabled'], (cfg) => {
-    if (cfg.extensionEnabled === false) {
-      console.log('[Snatcher] Extension disabled — skipping.');
-      return;
-    }
-    _processPdfInner(pdfUrl, tabId, tabTitle);
-  });
-}
-
-function _processPdfInner(pdfUrl, tabId, tabTitle) {
   // SUPPORT FOR WRAPPERS (e.g., PW viewer, Xylem)
+  // If URL is a wrapper, extract the actual PDF link from parameters
   try {
     const urlObj = new URL(pdfUrl);
     const nestedUrl = urlObj.searchParams.get('pdf_url') || urlObj.searchParams.get('file') || urlObj.searchParams.get('url');
@@ -71,17 +52,14 @@ function _processPdfInner(pdfUrl, tabId, tabTitle) {
     }
   } catch (e) { }
 
+  // Check if we already processed this URL recently to avoid duplicates
   if (processedUrls.has(pdfUrl)) return;
   processedUrls.add(pdfUrl);
-  setTimeout(() => processedUrls.delete(pdfUrl), 30000);
+  setTimeout(() => processedUrls.delete(pdfUrl), 30000); // 30s cooldown
 
   logDiagnostic(`🚀 PDF Detected: ${pdfUrl}`);
 
-  // Notify content.js to do the 5s double-back (handled separately in content.js)
-  if (tabId && tabId > 0) {
-    chrome.tabs.sendMessage(tabId, { type: 'PDF_DETECTED_GO_BACK' }).catch(() => { });
-  }
-
+  // Try to get title from tab title first
   let pdfTopic = tabTitle || "Document";
   pdfTopic = pdfTopic.replace(".pdf", "").split('|')[0].trim();
 
