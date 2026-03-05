@@ -39,9 +39,6 @@ function logDiagnostic(msg) {
   });
 }
 
-// Cache to prevent duplicate uploads
-const processedUrls = new Set();
-
 function processPdf(pdfUrl, tabId, tabTitle) {
   if (!pdfUrl) return;
 
