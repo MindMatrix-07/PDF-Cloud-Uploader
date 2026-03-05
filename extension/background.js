@@ -30,8 +30,22 @@ function logDiagnostic(msg) {
   });
 }
 
+// Cache to prevent duplicate uploads
+const processedUrls = new Set();
+
 function processPdf(pdfUrl, tabId, tabTitle) {
   if (!pdfUrl) return;
+
+  // SUPPORT FOR WRAPPERS (e.g., PW viewer)
+  // If the URL is a wrapper, extract the actual PDF link from parameters
+  try {
+    const urlObj = new URL(pdfUrl);
+    const nestedUrl = urlObj.searchParams.get('pdf_url') || urlObj.searchParams.get('file') || urlObj.searchParams.get('url');
+    if (nestedUrl && nestedUrl.toLowerCase().includes('.pdf')) {
+      logDiagnostic(`Extracted nested PDF: ${nestedUrl}`);
+      pdfUrl = nestedUrl;
+    }
+  } catch (e) { }
 
   // Check if we already processed this URL recently to avoid duplicates
   if (processedUrls.has(pdfUrl)) return;
