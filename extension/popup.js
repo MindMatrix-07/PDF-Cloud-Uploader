@@ -1,66 +1,51 @@
-// Load existing data on startup
-chrome.storage.local.get(['lastUrl', 'megaSession', 'uploadHistory'], (res) => {
+// popup.js
+
+// Load stored values on open
+chrome.storage.local.get(['lastUrl', 'megaSession', 'extensionEnabled'], (res) => {
   if (res.lastUrl) document.getElementById('url').innerText = res.lastUrl;
   if (res.megaSession) document.getElementById('session-id').value = res.megaSession;
-  refreshHistory(res.uploadHistory || []);
+
+  // Toggle defaults to ON (true) if never set
+  const enabled = res.extensionEnabled !== false;
+  document.getElementById('ext-toggle').checked = enabled;
+  document.getElementById('toggle-label').textContent = enabled ? 'ON' : 'OFF';
 });
 
-// Periodic refresh for active elements
+// Toggle — enable/disable the whole extension
+document.getElementById('ext-toggle').addEventListener('change', (e) => {
+  const enabled = e.target.checked;
+  chrome.storage.local.set({ extensionEnabled: enabled });
+  document.getElementById('toggle-label').textContent = enabled ? 'ON' : 'OFF';
+});
+
+// Refresh last URL every 2s
 setInterval(() => {
-  chrome.storage.local.get(['lastUrl', 'uploadHistory', 'diagLogs'], (res) => {
-    document.getElementById('url').innerText = res.lastUrl || 'Open a PDF...';
-    refreshHistory(res.uploadHistory || []);
-    if (document.getElementById('logs-container').style.display === 'block') {
-      document.getElementById('logs').innerHTML = (res.diagLogs || []).join('<br>') || 'No logs...';
-    }
+  chrome.storage.local.get(['lastUrl'], (res) => {
+    document.getElementById('url').innerText = res.lastUrl || 'No PDF detected.';
   });
 }, 2000);
 
-// Session Management
+// Save Session
 document.getElementById('save-session').addEventListener('click', () => {
   const sid = document.getElementById('session-id').value.trim();
-  chrome.storage.local.set({ megaSession: sid }, () => {
-    alert("Session saved! It will be used for next uploads.");
-  });
+  chrome.storage.local.set({ megaSession: sid }, () => alert("Session saved!"));
 });
 
-// History Display
-function refreshHistory(history) {
-  const list = document.getElementById('history-list');
-  if (!history || history.length === 0) {
-    list.innerHTML = '<span style="color: #888;">No recent uploads.</span>';
-    return;
-  }
-
-  list.innerHTML = history.map(item => `
-    <div style="border-bottom: 1px solid #eee; padding: 4px 0;">
-      <div style="font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.fileName}</div>
-      <div style="font-size: 9px; color: #666;">
-        Method: <span style="color: ${item.method === 'SESSION' ? 'green' : 'blue'}">${item.method}</span> | ${new Date(item.timestamp).toLocaleTimeString()}
-      </div>
-    </div>
-  `).join('');
-}
-
-// Download Button
-document.getElementById('download').addEventListener('click', () => {
-  let url = document.getElementById('url').innerText;
-  if (url.startsWith('http')) {
-    chrome.downloads.download({ url: url });
-  } else {
-    alert("Please open a PDF first!");
-  }
-});
-
-// Logs Toggle
+// Debug Logs Toggle
 const toggleBtn = document.getElementById('toggle-logs');
 const logsContainer = document.getElementById('logs-container');
 toggleBtn.addEventListener('click', () => {
-  const isHidden = logsContainer.style.display === 'none';
-  logsContainer.style.display = isHidden ? 'block' : 'none';
-  toggleBtn.innerText = isHidden ? 'Hide Debug Logs' : 'Show Debug Logs';
+  const hidden = logsContainer.style.display === 'none';
+  logsContainer.style.display = hidden ? 'block' : 'none';
+  toggleBtn.textContent = hidden ? 'Hide Debug Logs' : 'Show Debug Logs';
+  if (hidden) {
+    chrome.storage.local.get(['diagLogs'], (res) => {
+      document.getElementById('logs').innerHTML = (res.diagLogs || []).join('<br>') || 'No logs...';
+    });
+  }
 });
 
 document.getElementById('clear-logs').addEventListener('click', () => {
   chrome.storage.local.set({ diagLogs: [] });
+  document.getElementById('logs').innerHTML = 'Cleared.';
 });
