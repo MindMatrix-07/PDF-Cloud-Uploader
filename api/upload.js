@@ -167,7 +167,8 @@ module.exports = async (req, res) => {
     return res.status(500).json({
       success: false,
       error: errorMessage,
-      details: error.stack
+      details: error.stack,
+      envStatus: envStatus
     });
   }
 };

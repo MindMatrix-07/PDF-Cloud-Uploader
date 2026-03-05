@@ -56,6 +56,10 @@ module.exports = async (req, res) => {
         if (error.message.includes('Authentication failed')) {
             errorMsg = "MEGA Authentication failed. Check your MEGA_SESSION or Credentials.";
         }
-        return res.status(500).json({ error: 'Failed to fetch history', details: errorMsg });
+        return res.status(500).json({
+            error: 'Failed to fetch history',
+            details: errorMsg,
+            envStatus: envStatus
+        });
     }
 };
