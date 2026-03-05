@@ -39,63 +39,68 @@ function logDiagnostic(msg) {
   });
 }
 
+// Cache to prevent duplicate uploads
+const processedUrls = new Set();
+
 function processPdf(pdfUrl, tabId, tabTitle) {
-  if (!pdfUrl) return;
-
-  // SUPPORT FOR WRAPPERS (e.g., PW viewer)
-  // If the URL is a wrapper, extract the actual PDF link from parameters
   try {
-    const urlObj = new URL(pdfUrl);
-    const nestedUrl = urlObj.searchParams.get('pdf_url') || urlObj.searchParams.get('file') || urlObj.searchParams.get('url');
-    if (nestedUrl && nestedUrl.toLowerCase().includes('.pdf')) {
-      logDiagnostic(`Extracted nested PDF: ${nestedUrl}`);
-      pdfUrl = nestedUrl;
-    }
-  } catch (e) { }
+    if (!pdfUrl) return;
 
-  // Check if we already processed this URL recently to avoid duplicates
-  if (processedUrls.has(pdfUrl)) return;
-  processedUrls.add(pdfUrl);
-  setTimeout(() => processedUrls.delete(pdfUrl), 30000); // 30s cooldown
-
-  logDiagnostic(`🚀 PDF Detected: ${pdfUrl}`);
-
-  // Try to get title from tab title first
-  let pdfTopic = tabTitle || "Document";
-  if (pdfTopic === "Document" || pdfTopic === "PDF" || pdfTopic === "PDF-Document") {
-    // If title is generic, try to get from filename in URL
+    // SUPPORT FOR WRAPPERS (e.g., PW viewer)
     try {
-      const filename = pdfUrl.split('/').pop().split('?')[0].replace(".pdf", "");
-      if (filename && filename.length > 5) pdfTopic = filename;
+      const urlObj = new URL(pdfUrl);
+      const nestedUrl = urlObj.searchParams.get('pdf_url') || urlObj.searchParams.get('file') || urlObj.searchParams.get('url');
+      if (nestedUrl && nestedUrl.toLowerCase().includes('.pdf')) {
+        logDiagnostic(`Extracted nested PDF: ${nestedUrl}`);
+        pdfUrl = nestedUrl;
+      }
     } catch (e) { }
-  }
-  pdfTopic = pdfTopic.replace(".pdf", "").split('|')[0].trim();
 
-  chrome.scripting.executeScript({
-    target: { tabId: tabId > 0 ? tabId : 0 },
-    func: () => document.querySelector('h1, h2, .pdf-title, .header-title')?.innerText || ""
-  }, (results) => {
-    if (chrome.runtime.lastError) {
-      logDiagnostic(`Scripting Note: Using tab/URL title (page restricted)`);
-    } else if (results && results[0].result) {
-      pdfTopic = results[0].result.split('|')[0].trim();
-      logDiagnostic(`Extracted Topic: ${pdfTopic}`);
+    // Check if we already processed this URL recently to avoid duplicates
+    if (processedUrls.has(pdfUrl)) return;
+    processedUrls.add(pdfUrl);
+    setTimeout(() => processedUrls.delete(pdfUrl), 30000); // 30s cooldown
+
+    logDiagnostic(`🚀 PDF Detected: ${pdfUrl}`);
+
+    // Try to get title from tab title first
+    let pdfTopic = tabTitle || "Document";
+    if (pdfTopic === "Document" || pdfTopic === "PDF" || pdfTopic === "PDF-Document") {
+      try {
+        const filename = pdfUrl.split('/').pop().split('?')[0].replace(".pdf", "");
+        if (filename && filename.length > 5) pdfTopic = filename;
+      } catch (e) { }
     }
+    pdfTopic = pdfTopic.replace(".pdf", "").split('|')[0].trim();
 
-    const finalFileName = `${pdfTopic}-${savedChapter}.pdf`.replace(/[\\/:*?"<>|]/g, "").trim();
-    logDiagnostic(`FINAL NAME: ${finalFileName}`);
+    chrome.scripting.executeScript({
+      target: { tabId: tabId > 0 ? tabId : 0 },
+      func: () => document.querySelector('h1, h2, .pdf-title, .header-title')?.innerText || ""
+    }, (results) => {
+      if (chrome.runtime.lastError) {
+        logDiagnostic(`Scripting Note: Using tab/URL title (page restricted)`);
+      } else if (results && results[0].result) {
+        pdfTopic = results[0].result.split('|')[0].trim();
+        logDiagnostic(`Extracted Topic: ${pdfTopic}`);
+      }
 
-    chrome.storage.local.set({ lastUrl: pdfUrl, lastFileName: finalFileName });
-    uploadToVercel(pdfUrl, finalFileName);
+      const finalFileName = `${pdfTopic}-${savedChapter}.pdf`.replace(/[\\/:*?"<>|]/g, "").trim();
+      logDiagnostic(`FINAL NAME: ${finalFileName}`);
 
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: 'icon.png',
-      title: 'PDF Snatched!',
-      message: `Sending ${finalFileName} to MEGA...`,
-      priority: 2
+      chrome.storage.local.set({ lastUrl: pdfUrl, lastFileName: finalFileName });
+      uploadToVercel(pdfUrl, finalFileName);
+
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icon.png',
+        title: 'PDF Snatched!',
+        message: `Sending ${finalFileName} to MEGA...`,
+        priority: 2
+      });
     });
-  });
+  } catch (err) {
+    logDiagnostic(`INTERNAL ERR: ${err.message}`);
+  }
 }
 
 // 2a. Navigation-based detection
@@ -108,10 +113,9 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
-// 2b. Header-based detection (The most reliable way)
+// 2b. Header-based detection
 chrome.webRequest.onHeadersReceived.addListener(
   (details) => {
-    // Only care about main page loads or iframe PDFs
     if (details.type === 'main_frame' || details.type === 'sub_frame') {
       const contentType = details.responseHeaders.find(h => h.name.toLowerCase() === 'content-type')?.value || "";
       if (contentType.toLowerCase().includes('application/pdf') || details.url.toLowerCase().includes(".pdf")) {
