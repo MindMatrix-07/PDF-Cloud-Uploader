@@ -47,9 +47,9 @@ function processPdf(pdfUrl, tabId, tabTitle) {
     } catch (e) { }
 
     processedUrls.add(pdfUrl);
-    setTimeout(() => processedUrls.delete(pdfUrl), 30000);
+    setTimeout(() => processedUrls.delete(pdfUrl), 15000); // Shorter lock
 
-    logDiagnostic(`🚀 PDF Detected: ${pdfUrl}`);
+    logDiagnostic(`🚀 PDF Detected: ${pdfUrl.split('/').pop().split('?')[0]}`);
 
     let pdfTopic = tabTitle || "Document";
     if (pdfTopic === "Document" || pdfTopic === "PDF") {
@@ -58,30 +58,58 @@ function processPdf(pdfUrl, tabId, tabTitle) {
     }
     pdfTopic = pdfTopic.replace(".pdf", "").split('|')[0].trim();
 
-    chrome.scripting.executeScript({
-      target: { tabId: tabId > 0 ? tabId : 0 },
-      func: () => document.querySelector('h1, h2, .pdf-title')?.innerText || ""
-    }, (results) => {
-      if (results?.[0]?.result) pdfTopic = results[0].result.split('|')[0].trim();
-
-      const finalFileName = `${pdfTopic}-${savedChapter}.pdf`.replace(/[\\/:*?"<>|]/g, "").trim();
-      logDiagnostic(`Attempting upload: ${finalFileName}`);
-
-      uploadToVercel(pdfUrl, finalFileName);
-
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'icon.png',
-        title: 'Snatching PDF...',
-        message: finalFileName,
-        priority: 1
+    // Instant Upload Triggers - Don't wait for script if tab is not readable
+    if (tabId && tabId > 0 && !pdfUrl.includes('chrome-extension://')) {
+      chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        func: () => document.querySelector('h1, h2, .pdf-title, .title, .breadcrumb-item.active')?.innerText || ""
+      }, (results) => {
+        if (results?.[0]?.result) pdfTopic = results[0].result.split('|')[0].trim();
+        startUpload(pdfUrl, pdfTopic);
       });
-    });
+
+      // Fallback timer if script hangs or doesn't return
+      setTimeout(() => {
+        if (processedUrls.has(pdfUrl)) { // Still same session
+          startUpload(pdfUrl, pdfTopic);
+        }
+      }, 1500);
+    } else {
+      startUpload(pdfUrl, pdfTopic);
+    }
   } catch (err) { logDiagnostic(`ERR: ${err.message}`); }
 }
 
+function startUpload(pdfUrl, pdfTopic) {
+  // Check if already uploaded (prevent duplicate from fallback)
+  const lockKey = `uploading_${pdfUrl}`;
+  chrome.storage.local.get([lockKey], (res) => {
+    if (res[lockKey]) return;
+    chrome.storage.local.set({ [lockKey]: true });
+    setTimeout(() => chrome.storage.local.remove(lockKey), 10000);
+
+    const finalFileName = `${pdfTopic}-${savedChapter}.pdf`.replace(/[\\/:*?"<>|]/g, "").trim();
+    logDiagnostic(`Attempting upload: ${finalFileName}`);
+
+    uploadToVercel(pdfUrl, finalFileName);
+
+    showNotification('Snatching PDF...', finalFileName);
+  });
+}
+
+function showNotification(title, message) {
+  chrome.notifications?.create({
+    type: 'basic',
+    iconUrl: 'icon.png',
+    title: title,
+    message: message,
+    priority: 1
+  });
+}
+
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (tab.url?.toLowerCase().includes(".pdf") && (changeInfo.status === 'complete' || tab.status === 'complete')) {
+  const url = tab.url?.toLowerCase() || "";
+  if (url.includes(".pdf") || url.includes("/pdf-viewer") || url.includes("/pdf_viewer")) {
     processPdf(tab.url, tabId, tab.title);
   }
 });
@@ -114,26 +142,7 @@ async function uploadToVercel(pdfUrl, fileName) {
 
       if (result.success) {
         logDiagnostic(`✅ SUCCESS: ${result.method} login`);
-
-        // Save to Local History
-        chrome.storage.local.get(['uploadHistory'], (hRes) => {
-          let history = hRes.uploadHistory || [];
-          history.unshift({
-            fileName: fileName,
-            method: result.method,
-            timestamp: result.timestamp,
-            chapter: result.chapter
-          });
-          chrome.storage.local.set({ uploadHistory: history.slice(0, 20) });
-        });
-
-        chrome.notifications.create({
-          type: 'basic',
-          iconUrl: 'icon.png',
-          title: 'Cloud Success!',
-          message: `Saved to: ${result.chapter} (${result.method})`,
-          priority: 2
-        });
+        showNotification('Cloud Success!', `Saved to: ${result.chapter}`);
       } else {
         logDiagnostic(`❌ FAIL: ${result.error}`);
       }
