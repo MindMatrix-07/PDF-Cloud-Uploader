@@ -19,8 +19,18 @@ module.exports = async (req, res) => {
     const hasSession = megaSession && megaSession !== 'undefined' && megaSession !== 'null';
     const hasCreds = megaEmail && megaEmail !== 'undefined' && megaPassword && megaPassword !== 'undefined';
 
+    const envStatus = {
+        MEGA_SESSION: hasSession ? `Found (${megaSession.substring(0, 8)}...)` : 'MISSING',
+        MEGA_EMAIL: megaEmail ? 'Found' : 'MISSING',
+        MEGA_PASS: megaPassword ? 'Found' : 'MISSING'
+    };
+
     if (!hasSession && !hasCreds) {
-        return res.status(500).json({ error: 'MEGA Environment Error', details: 'Check Vercel Environment Variables.' });
+        return res.status(500).json({
+            error: 'MEGA Environment Error',
+            details: 'Check Vercel Environment Variables.',
+            envStatus: envStatus
+        });
     }
 
     try {

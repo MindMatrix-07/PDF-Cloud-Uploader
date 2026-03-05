@@ -52,11 +52,19 @@ module.exports = async (req, res) => {
   const hasSession = megaSession && megaSession !== 'undefined' && megaSession !== 'null';
   const hasCreds = megaEmail && megaEmail !== 'undefined' && megaPassword && megaPassword !== 'undefined';
 
+  // Obscured status for debugging
+  const envStatus = {
+    MEGA_SESSION: hasSession ? `Found (${megaSession.substring(0, 8)}...)` : 'MISSING',
+    MEGA_EMAIL: megaEmail ? 'Found' : 'MISSING',
+    MEGA_PASS: megaPassword ? 'Found' : 'MISSING'
+  };
+
   if (!hasSession && !hasCreds) {
     console.error('Environment Error: No valid MEGA credentials or session found.');
     return res.status(500).json({
       error: 'MEGA Environment Error',
-      details: 'MEGA_SESSION or MEGA_EMAIL/PASSWORD is missing in Vercel. Please check your Environment Variables.'
+      details: 'MEGA_SESSION or MEGA_EMAIL/PASSWORD is missing in Vercel.',
+      envStatus: envStatus
     });
   }
 
@@ -71,6 +79,7 @@ module.exports = async (req, res) => {
     }
 
     const storage = await new Storage(storageOptions).ready;
+    console.log('Login successful');
     if (!storage.root) throw new Error("MEGA storage root is not accessible.");
 
     console.log('MEGA Ready. Finding folder...');
