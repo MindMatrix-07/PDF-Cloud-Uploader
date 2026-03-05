@@ -23,15 +23,36 @@ module.exports = async (req, res) => {
     let storage;
     let authMethod = "NONE";
 
-    try {
+    async function performLogin() {
         if (hasSession) {
-            authMethod = "SESSION";
-            storage = await new Storage({ session: megaSession }).ready;
-        } else if (hasCreds) {
-            authMethod = "CREDENTIALS";
-            storage = await new Storage({ email: megaEmail, password: megaPassword, autologin: true }).ready;
-        } else {
-            throw new Error("No MEGA credentials found.");
+            try {
+                authMethod = "SESSION";
+                storage = await new Storage({ session: megaSession }).ready;
+                if (storage.root) return true;
+            } catch (e) {
+                console.warn("Session failed in history check</strong>");
+            }
+        }
+        if (hasCreds) {
+            try {
+                authMethod = "CREDENTIALS";
+                storage = await new Storage({ email: megaEmail, password: megaPassword, autologin: true }).ready;
+                if (storage.root) return true;
+            } catch (e) {
+                console.error("Creds failed in history check</strong>");
+            }
+        }
+        return false;
+    }
+
+    try {
+        const loginSuccess = await performLogin();
+        if (!loginSuccess) {
+            return res.status(500).json({
+                error: "MEGA Authentication Failed",
+                details: "Both Session and Email/Pass were rejected.",
+                envStatus: envStatus
+            });
         }
 
         let historyFile = storage.root.children.find(item => item.name === 'history.json' && !item.directory);
@@ -40,18 +61,9 @@ module.exports = async (req, res) => {
         return res.status(200).json(JSON.parse(data.toString()));
 
     } catch (err) {
-        // Fallback check
-        if (authMethod === "SESSION" && hasCreds) {
-            return res.status(500).json({
-                error: "Session Invalid",
-                details: "Falling back to Email/Pass directly next time.",
-                envStatus: envStatus,
-                step: "History_Auth_Fallback"
-            });
-        }
         return res.status(500).json({
             error: err.message,
-            details: "Authentication failed for all methods.",
+            details: "Unexpected failure during history fetch.",
             envStatus: envStatus
         });
     }
