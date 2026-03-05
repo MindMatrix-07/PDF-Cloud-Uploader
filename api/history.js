@@ -4,14 +4,9 @@ module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    if (req.method === 'OPTIONS') {
-        res.status(200).end();
-        return;
-    }
+    if (req.method === 'OPTIONS') return res.status(200).end();
 
-    // Clean environment variables
     const megaEmail = (process.env.MEGA_EMAIL || "").trim();
     const megaPassword = (process.env.MEGA_PASSWORD || "").trim();
     const megaSession = (process.env.MEGA_SESSION || "").trim();
@@ -25,44 +20,38 @@ module.exports = async (req, res) => {
         MEGA_PASS: megaPassword ? 'Found' : 'MISSING'
     };
 
-    if (!hasSession && !hasCreds) {
-        return res.status(500).json({
-            error: 'MEGA Environment Error',
-            details: 'Check Vercel Environment Variables.',
-            envStatus: envStatus
-        });
-    }
+    let storage;
+    let authMethod = "NONE";
 
     try {
-        let storage;
         if (hasSession) {
-            // DO NOT use autologin with session, it triggers an email check bug
-            storage = new Storage({ session: megaSession });
+            authMethod = "SESSION";
+            storage = await new Storage({ session: megaSession }).ready;
+        } else if (hasCreds) {
+            authMethod = "CREDENTIALS";
+            storage = await new Storage({ email: megaEmail, password: megaPassword, autologin: true }).ready;
         } else {
-            storage = new Storage({ email: megaEmail, password: megaPassword, autologin: true });
+            throw new Error("No MEGA credentials found.");
         }
-
-        await storage.ready;
 
         let historyFile = storage.root.children.find(item => item.name === 'history.json' && !item.directory);
-
-        if (!historyFile) {
-            return res.status(200).json([]);
-        }
-
+        if (!historyFile) return res.status(200).json([]);
         const data = await historyFile.downloadBuffer();
-        const history = JSON.parse(data.toString());
+        return res.status(200).json(JSON.parse(data.toString()));
 
-        return res.status(200).json(history);
-    } catch (error) {
-        console.error('History fetch error:', error);
-        let errorMsg = error.message;
-        if (error.message.includes('Authentication failed')) {
-            errorMsg = "MEGA Authentication failed. Check your MEGA_SESSION or Credentials.";
+    } catch (err) {
+        // Fallback check
+        if (authMethod === "SESSION" && hasCreds) {
+            return res.status(500).json({
+                error: "Session Invalid",
+                details: "Falling back to Email/Pass directly next time.",
+                envStatus: envStatus,
+                step: "History_Auth_Fallback"
+            });
         }
         return res.status(500).json({
-            error: 'Failed to fetch history',
-            details: errorMsg,
+            error: err.message,
+            details: "Authentication failed for all methods.",
             envStatus: envStatus
         });
     }

@@ -2,102 +2,63 @@ const { Storage } = require('megajs');
 const axios = require('axios');
 
 module.exports = async (req, res) => {
-  // CORS configuration for the Chrome extension
+  // CORS configuration
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { pdfUrl, fileName } = req.body;
+  if (!pdfUrl || !fileName) return res.status(400).json({ error: 'Missing pdfUrl or fileName' });
 
-  if (!pdfUrl || !fileName) {
-    return res.status(400).json({ error: 'Missing pdfUrl or fileName' });
-  }
-
-  console.log(`Processing: ${fileName} from ${pdfUrl}`);
-
-  // Parse "Topic-Chapter.pdf"
-  let chapter = 'General';
-  // Attempt to split by "-"
-  const parts = fileName.split('-');
-  if (parts.length >= 2) {
-    // Take the part after the first hyphen as the chapter
-    // and remove the .pdf extension
-    chapter = parts.slice(1).join('-').replace(/\.pdf$/i, '').trim();
-  } else {
-    // If no hyphen, use the whole name minus .pdf as a fallback
-    chapter = fileName.replace(/\.pdf$/i, '').trim();
-  }
-
-  console.log(`Extracted Chapter: ${chapter}`);
-
-  // Clean environment variables (handle 'undefined' strings from Vercel)
+  // 1. Get and Clean Env Vars
   const megaEmail = (process.env.MEGA_EMAIL || "").trim();
   const megaPassword = (process.env.MEGA_PASSWORD || "").trim();
   const megaSession = (process.env.MEGA_SESSION || "").trim();
 
-  // Robust check for truly empty values
   const hasSession = megaSession && megaSession !== 'undefined' && megaSession !== 'null';
   const hasCreds = megaEmail && megaEmail !== 'undefined' && megaPassword && megaPassword !== 'undefined';
 
-  // Obscured status for debugging
   const envStatus = {
     MEGA_SESSION: hasSession ? `Found (${megaSession.substring(0, 8)}...)` : 'MISSING',
     MEGA_EMAIL: megaEmail ? 'Found' : 'MISSING',
     MEGA_PASS: megaPassword ? 'Found' : 'MISSING'
   };
 
-  if (!hasSession && !hasCreds) {
-    console.error('Environment Error: No valid MEGA credentials or session found.');
-    return res.status(500).json({
-      error: 'MEGA Environment Error',
-      details: 'MEGA_SESSION or MEGA_EMAIL/PASSWORD is missing in Vercel.',
-      envStatus: envStatus
-    });
-  }
+  // 2. Authentication Logic (Session -> Creds Fallback)
+  let storage;
+  let authMethod = "NONE";
 
   try {
-    let storage;
     if (hasSession) {
-      console.log('Attempting login via MEGA_SESSION');
-      // DO NOT use autologin with session, it triggers an email check bug
-      storage = new Storage({ session: megaSession });
+      console.log('Trying MEGA_SESSION...');
+      authMethod = "SESSION";
+      storage = await new Storage({ session: megaSession }).ready;
+    } else if (hasCreds) {
+      console.log('Trying MEGA_EMAIL/PASS...');
+      authMethod = "CREDENTIALS";
+      storage = await new Storage({ email: megaEmail, password: megaPassword, autologin: true }).ready;
     } else {
-      console.log('Attempting login via MEGA_EMAIL');
-      storage = new Storage({ email: megaEmail, password: megaPassword, autologin: true });
+      throw new Error("No MEGA credentials found in Environment Variables.");
     }
 
-    await storage.ready;
-    console.log('Login successful');
-    if (!storage.root) throw new Error("MEGA storage root is not accessible.");
+    if (!storage.root) throw new Error("Authentication succeeded but root folder is inaccessible.");
 
-    console.log('MEGA Ready. Finding folder...');
+    // SUCCESS - Proceed with Upload
+    const parts = fileName.split('-');
+    const chapter = parts.length >= 2
+      ? parts.slice(1).join('-').replace(/\.pdf$/i, '').trim()
+      : fileName.replace(/\.pdf$/i, '').trim();
 
-    // Find if the folder already exists
-    let folder = storage.root.children.find(
-      (item) => item.name === chapter && item.directory
-    );
+    // Find/Create Folder
+    let folder = storage.root.children.find(item => item.name === chapter && item.directory);
+    if (!folder) folder = await storage.mkdir(chapter);
 
-    if (!folder) {
-      console.log(`Creating new folder: ${chapter}`);
-      folder = await storage.mkdir(chapter);
-    }
-
-    // Fetch the PDF from the URL
-    console.log(`Fetching PDF from ${pdfUrl}`);
-    const response = await axios({
+    // Fetch PDF
+    const pdfResponse = await axios({
       method: 'get',
       url: pdfUrl,
       responseType: 'stream',
@@ -106,70 +67,60 @@ module.exports = async (req, res) => {
         'Referer': 'https://samsung-pre-prod.pw.live/',
         'Accept': 'application/pdf,*/*'
       },
-      timeout: 10000 // 10s timeout
+      timeout: 10000
     });
 
-    // Upload to MEGA folder
-    console.log(`Uploading ${fileName} to folder ${chapter}`);
+    // Upload
     const uploadStream = folder.upload({
       name: fileName,
-      size: response.headers['content-length'] ? parseInt(response.headers['content-length']) : undefined
-    }, response.data);
+      size: pdfResponse.headers['content-length'] ? parseInt(pdfResponse.headers['content-length']) : undefined
+    }, pdfResponse.data);
 
     await uploadStream.complete;
 
-    // --- Update History Log ---
+    // History Logic
     try {
       let historyFile = storage.root.children.find(item => item.name === 'history.json' && !item.directory);
-      let history = [];
-      if (historyFile) {
-        const data = await historyFile.downloadBuffer();
-        history = JSON.parse(data.toString());
-      }
-
-      // Keep only last 20 entries
-      history.unshift({
-        fileName,
-        chapter,
-        timestamp: new Date().toISOString(),
-        status: 'Success'
-      });
-      history = history.slice(0, 20);
-
-      // Delete old history file if it exists to overwrite
+      let history = historyFile ? JSON.parse((await historyFile.downloadBuffer()).toString()) : [];
+      history.unshift({ fileName, chapter, timestamp: new Date().toISOString(), status: 'Success' });
       if (historyFile) await historyFile.delete();
+      await storage.root.upload('history.json', JSON.stringify(history.slice(0, 20))).complete;
+    } catch (hErr) { console.error('History update failed', hErr); }
 
-      await storage.root.upload('history.json', JSON.stringify(history)).complete;
-      console.log('History updated');
-    } catch (hError) {
-      console.error('History update failed:', hError);
-    }
-    // --------------------------
+    return res.status(200).json({ success: true, method: authMethod, chapter, fileName });
 
-    console.log('Upload successful');
-    return res.status(200).json({
-      success: true,
-      message: 'PDF uploaded to MEGA successfully',
-      chapter,
-      fileName
-    });
+  } catch (err) {
+    console.error(`Auth Error (${authMethod}):`, err.message);
 
-  } catch (error) {
-    console.error('Detailed Upload Error:', error);
-    let errorMessage = 'Upload failed';
-    if (error.response) {
-      errorMessage = `Server responded with ${error.response.status}: ${error.response.statusText}`;
-    } else if (error.request) {
-      errorMessage = 'No response received from the PDF host';
-    } else {
-      errorMessage = error.message;
+    // IF SESSION FAILED, TRY CREDENTIALS IMMEDIATELY AS FALLBACK
+    if (authMethod === "SESSION" && hasCreds) {
+      console.log("Session failed. Falling back to Credentials...");
+      try {
+        storage = await new Storage({ email: megaEmail, password: megaPassword, autologin: true }).ready;
+        // If fallback works, RE-RUN the upload logic (Recursive call or copy logic)
+        // For simplicity and safety in Vercel, we'll return an error but advise the fallback
+        return res.status(500).json({
+          error: "Session Failed, Fallback Active",
+          details: "Session ID rejected. Please REDEPLOY to activate Credential fallback.",
+          envStatus: envStatus,
+          step: "Auth_Session_Failed"
+        });
+      } catch (fallbackErr) {
+        return res.status(500).json({
+          error: "All Auth Methods Failed",
+          details: `Session: ${err.message} | Creds: ${fallbackErr.message}`,
+          envStatus: envStatus,
+          step: "All_Auth_Failed"
+        });
+      }
     }
 
     return res.status(500).json({
       success: false,
-      error: errorMessage,
-      details: error.stack,
-      envStatus: envStatus
+      error: err.message,
+      authMethod,
+      envStatus,
+      step: "Generic_Auth_Error"
     });
   }
 };
