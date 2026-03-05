@@ -43,22 +43,35 @@ module.exports = async (req, res) => {
 
   console.log(`Extracted Chapter: ${chapter}`);
 
-  const megaEmail = process.env.MEGA_EMAIL;
-  const megaPassword = process.env.MEGA_PASSWORD;
-  const megaSession = process.env.MEGA_SESSION;
+  // Clean environment variables (handle 'undefined' strings from Vercel)
+  const megaEmail = (process.env.MEGA_EMAIL || "").trim();
+  const megaPassword = (process.env.MEGA_PASSWORD || "").trim();
+  const megaSession = (process.env.MEGA_SESSION || "").trim();
 
-  if (!megaSession && (!megaEmail || !megaPassword)) {
-    return res.status(500).json({ error: 'Server environment (MEGA credentials or session) is not set' });
+  // Robust check for truly empty values
+  const hasSession = megaSession && megaSession !== 'undefined' && megaSession !== 'null';
+  const hasCreds = megaEmail && megaEmail !== 'undefined' && megaPassword && megaPassword !== 'undefined';
+
+  if (!hasSession && !hasCreds) {
+    console.error('Environment Error: No valid MEGA credentials or session found.');
+    return res.status(500).json({
+      error: 'MEGA Environment Error',
+      details: 'MEGA_SESSION or MEGA_EMAIL/PASSWORD is missing in Vercel. Please check your Environment Variables.'
+    });
   }
 
   try {
-    const storageOptions = megaSession
-      ? { session: megaSession, autologin: true }
-      : { email: megaEmail, password: megaPassword, autologin: true };
+    let storageOptions;
+    if (hasSession) {
+      console.log('Attempting login via MEGA_SESSION');
+      storageOptions = { session: megaSession, autologin: true };
+    } else {
+      console.log('Attempting login via MEGA_EMAIL');
+      storageOptions = { email: megaEmail, password: megaPassword, autologin: true };
+    }
 
     const storage = await new Storage(storageOptions).ready;
-
-    console.log(megaSession ? 'Logged into MEGA using Session' : 'Logged into MEGA using Credentials');
+    console.log('Login successful');
 
     // Find if the folder already exists
     let folder = storage.root.children.find(

@@ -11,16 +11,20 @@ module.exports = async (req, res) => {
         return;
     }
 
-    const megaEmail = process.env.MEGA_EMAIL;
-    const megaPassword = process.env.MEGA_PASSWORD;
-    const megaSession = process.env.MEGA_SESSION;
+    // Clean environment variables
+    const megaEmail = (process.env.MEGA_EMAIL || "").trim();
+    const megaPassword = (process.env.MEGA_PASSWORD || "").trim();
+    const megaSession = (process.env.MEGA_SESSION || "").trim();
 
-    if (!megaSession && (!megaEmail || !megaPassword)) {
-        return res.status(500).json({ error: 'Server environment not set' });
+    const hasSession = megaSession && megaSession !== 'undefined' && megaSession !== 'null';
+    const hasCreds = megaEmail && megaEmail !== 'undefined' && megaPassword && megaPassword !== 'undefined';
+
+    if (!hasSession && !hasCreds) {
+        return res.status(500).json({ error: 'MEGA Environment Error', details: 'Check Vercel Environment Variables.' });
     }
 
     try {
-        const storageOptions = megaSession
+        const storageOptions = hasSession
             ? { session: megaSession, autologin: true }
             : { email: megaEmail, password: megaPassword, autologin: true };
 
