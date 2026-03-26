@@ -114,15 +114,49 @@ chrome.webRequest.onHeadersReceived.addListener(
 );
 
 async function uploadToVercel(pdfUrl, fileName) {
-  logDiagnostic(`Contacting server: ${VERCEL_URL}`);
+  logDiagnostic(`Fetching PDF bytes locally (with cookies): ${pdfUrl}`);
 
   chrome.storage.local.get(['megaSession'], async (res) => {
     const sessionToUse = res.megaSession || "";
     try {
+      // ── STEP 1: Download PDF in the service worker (has user cookies/session) ──
+      // This is the KEY fix: instead of letting Vercel fetch the URL (no cookies),
+      // we fetch locally where we're authenticated, then send raw bytes.
+      const pdfFetch = await fetch(pdfUrl, {
+        credentials: 'include',  // send cookies so the site authorises us
+        headers: {
+          'Accept': 'application/pdf,*/*',
+          'Referer': 'https://samsung-pre-prod.pw.live/'
+        }
+      });
+
+      if (!pdfFetch.ok) {
+        logDiagnostic(`❌ PDF fetch failed: HTTP ${pdfFetch.status} for ${pdfUrl}`);
+        return;
+      }
+
+      const contentType = pdfFetch.headers.get('content-type') || '';
+      if (!contentType.includes('pdf') && !contentType.includes('octet-stream')) {
+        logDiagnostic(`⚠️ Unexpected content-type: ${contentType} — might not be a real PDF`);
+      }
+
+      // ── STEP 2: Convert PDF ArrayBuffer → base64 string ──
+      const arrayBuffer = await pdfFetch.arrayBuffer();
+      const uint8 = new Uint8Array(arrayBuffer);
+      // Chunk-encode to avoid call-stack overflow on large PDFs
+      let binary = '';
+      const CHUNK = 8192;
+      for (let i = 0; i < uint8.length; i += CHUNK) {
+        binary += String.fromCharCode(...uint8.subarray(i, i + CHUNK));
+      }
+      const base64Data = btoa(binary);
+      logDiagnostic(`✅ PDF downloaded locally: ${(arrayBuffer.byteLength / 1024).toFixed(1)} KB`);
+
+      // ── STEP 3: Send base64 bytes + metadata to Vercel ──
       const response = await fetch(VERCEL_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pdfUrl, fileName, megaSession: sessionToUse })
+        body: JSON.stringify({ pdfData: base64Data, fileName, megaSession: sessionToUse })
       });
 
       const result = await response.json();

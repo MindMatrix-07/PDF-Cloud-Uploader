@@ -23,8 +23,8 @@ module.exports = async (req, res) => {
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { pdfUrl, fileName, megaSession: dynamicSession } = req.body;
-  if (!pdfUrl || !fileName) return res.status(400).json({ error: 'Missing pdfUrl or fileName' });
+  const { pdfUrl, pdfData, fileName, megaSession: dynamicSession } = req.body;
+  if ((!pdfUrl && !pdfData) || !fileName) return res.status(400).json({ error: 'Missing pdfUrl/pdfData or fileName' });
 
   const megaEmail = (process.env.MEGA_EMAIL || "").trim();
   const megaPassword = (process.env.MEGA_PASSWORD || "").trim();
@@ -91,21 +91,31 @@ module.exports = async (req, res) => {
     let folder = storage.root.children.find(item => item.name === chapter && item.directory);
     if (!folder) folder = await storage.mkdir(chapter);
 
-    const pdfResponse = await axios({
-      method: 'get', url: pdfUrl, responseType: 'stream',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://samsung-pre-prod.pw.live/',
-        'Accept': 'application/pdf,*/*'
-      },
-      timeout: 15000
-    });
+    // ── Download or decode the PDF ─────────────────────────────────────────
+    let pdfBuffer;
+    if (pdfData) {
+      // Client already fetched the PDF with auth cookies — just decode base64
+      pdfBuffer = Buffer.from(pdfData, 'base64');
+      console.log(`Using client-provided PDF bytes (${pdfBuffer.length} bytes)`);
+    } else {
+      // Fallback: fetch from URL server-side (may fail for auth-protected PDFs)
+      const pdfResponse = await axios({
+        method: 'get', url: pdfUrl, responseType: 'arraybuffer',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Referer': 'https://samsung-pre-prod.pw.live/',
+          'Accept': 'application/pdf,*/*'
+        },
+        timeout: 15000
+      });
+      pdfBuffer = Buffer.from(pdfResponse.data);
+    }
 
     const uploadStream = folder.upload({
       name: fileName,
-      size: pdfResponse.headers['content-length'] ? parseInt(pdfResponse.headers['content-length']) : undefined,
+      size: pdfBuffer.length,
       allowUploadBuffering: true
-    }, pdfResponse.data);
+    }, pdfBuffer);
 
     await uploadStream.complete;
 

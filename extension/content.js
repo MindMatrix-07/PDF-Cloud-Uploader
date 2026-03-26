@@ -118,7 +118,7 @@
                             history.back();
                             backScheduled = false;
                         }, 600);
-                    }, 5000);
+                    }, 2000); // Reduced from 5s — PDF is fetched client-side immediately, no need to stay longer
                 });
             });
         }

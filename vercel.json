@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "api/upload.js": {
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  },
+  "api": {
+    "bodyParser": {
+      "sizeLimit": "20mb"
+    }
+  }
+}
