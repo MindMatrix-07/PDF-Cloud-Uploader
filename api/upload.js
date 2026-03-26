@@ -1,6 +1,15 @@
 const { Storage } = require('megajs');
 const axios = require('axios');
 
+// Increase body size limit to 20MB (needed for base64-encoded PDFs)
+module.exports.config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '20mb'
+    }
+  }
+};
+
 // In-memory log store (resets on cold start, but keeps logs within a warm instance)
 const uploadLog = [];
 function addLog(entry) {
