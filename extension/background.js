@@ -114,16 +114,15 @@ chrome.webRequest.onHeadersReceived.addListener(
 );
 
 async function uploadToVercel(pdfUrl, fileName) {
-  logDiagnostic(`Fetching PDF bytes locally (with cookies): ${pdfUrl}`);
+  const VERSION = "1.6.0";
+  logDiagnostic(`[v${VERSION}] Fetching PDF bytes locally: ${pdfUrl}`);
 
   chrome.storage.local.get(['megaSession'], async (res) => {
     const sessionToUse = res.megaSession || "";
     try {
       // ── STEP 1: Download PDF in the service worker (has user cookies/session) ──
-      // This is the KEY fix: instead of letting Vercel fetch the URL (no cookies),
-      // we fetch locally where we're authenticated, then send raw bytes.
       const pdfFetch = await fetch(pdfUrl, {
-        credentials: 'include',  // send cookies so the site authorises us
+        credentials: 'include',
         headers: {
           'Accept': 'application/pdf,*/*',
           'Referer': 'https://samsung-pre-prod.pw.live/'
@@ -131,26 +130,20 @@ async function uploadToVercel(pdfUrl, fileName) {
       });
 
       if (!pdfFetch.ok) {
-        logDiagnostic(`❌ PDF fetch failed: HTTP ${pdfFetch.status} for ${pdfUrl}`);
+        logDiagnostic(`❌ [v${VERSION}] PDF fetch failed: HTTP ${pdfFetch.status}`);
         return;
       }
 
-      const contentType = pdfFetch.headers.get('content-type') || '';
-      if (!contentType.includes('pdf') && !contentType.includes('octet-stream')) {
-        logDiagnostic(`⚠️ Unexpected content-type: ${contentType} — might not be a real PDF`);
-      }
-
-      // ── STEP 2: Convert PDF ArrayBuffer → base64 string ──
+      // ── STEP 2: Process PDF Data ──
       const arrayBuffer = await pdfFetch.arrayBuffer();
       const fileSizeKB = (arrayBuffer.byteLength / 1024).toFixed(1);
-      logDiagnostic(`✅ PDF downloaded locally: ${fileSizeKB} KB`);
+      logDiagnostic(`✅ [v${VERSION}] PDF downloaded locally: ${fileSizeKB} KB`);
 
       let payload = { fileName, megaSession: sessionToUse, pdfUrl };
 
-      // Vercel has a 4.5MB limit. If base64-encoded PDF exceeds this, send URL + Cookies instead.
-      // 3MB raw ≈ 4MB base64. Let's use 3MB as a safe threshold.
-      if (arrayBuffer.byteLength > 3 * 1024 * 1024) {
-        logDiagnostic(`⚠️ File too large for direct upload (${fileSizeKB} KB). Switching to URL + Cookies.`);
+      // Vercel limit is 4.5MB. 2MB raw ≈ 2.7MB base64 (very safe).
+      if (arrayBuffer.byteLength > 2 * 1024 * 1024) {
+        logDiagnostic(`⚠️ [v${VERSION}] File > 2MB. Switching to URL + Cookies.`);
         const cookies = await chrome.cookies.getAll({ url: pdfUrl });
         payload.cookies = cookies.map(c => `${c.name}=${c.value}`).join('; ');
       } else {
