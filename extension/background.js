@@ -142,24 +142,43 @@ async function uploadToVercel(pdfUrl, fileName) {
 
       // ── STEP 2: Convert PDF ArrayBuffer → base64 string ──
       const arrayBuffer = await pdfFetch.arrayBuffer();
-      const uint8 = new Uint8Array(arrayBuffer);
-      // Chunk-encode to avoid call-stack overflow on large PDFs
-      let binary = '';
-      const CHUNK = 8192;
-      for (let i = 0; i < uint8.length; i += CHUNK) {
-        binary += String.fromCharCode(...uint8.subarray(i, i + CHUNK));
-      }
-      const base64Data = btoa(binary);
-      logDiagnostic(`✅ PDF downloaded locally: ${(arrayBuffer.byteLength / 1024).toFixed(1)} KB`);
+      const fileSizeKB = (arrayBuffer.byteLength / 1024).toFixed(1);
+      logDiagnostic(`✅ PDF downloaded locally: ${fileSizeKB} KB`);
 
-      // ── STEP 3: Send base64 bytes + metadata to Vercel ──
+      let payload = { fileName, megaSession: sessionToUse, pdfUrl };
+
+      // Vercel has a 4.5MB limit. If base64-encoded PDF exceeds this, send URL + Cookies instead.
+      // 3.5MB raw ≈ 4.7MB base64. Let's use 3.5MB as the threshold.
+      if (arrayBuffer.byteLength > 3.5 * 1024 * 1024) {
+        logDiagnostic(`⚠️ File too large for direct upload (${fileSizeKB} KB). Switching to URL + Cookies.`);
+        const cookies = await chrome.cookies.getAll({ url: pdfUrl });
+        payload.cookies = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+      } else {
+        const uint8 = new Uint8Array(arrayBuffer);
+        let binary = '';
+        const CHUNK = 8192;
+        for (let i = 0; i < uint8.length; i += CHUNK) {
+          binary += String.fromCharCode(...uint8.subarray(i, i + CHUNK));
+        }
+        payload.pdfData = btoa(binary);
+      }
+
+      // ── STEP 3: Send to Vercel ──
       const response = await fetch(VERCEL_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pdfData: base64Data, fileName, megaSession: sessionToUse })
+        body: JSON.stringify(payload)
       });
 
-      const result = await response.json();
+      const text = await response.text();
+      let result;
+      try {
+        result = JSON.parse(text);
+      } catch (e) {
+        logDiagnostic(`❌ Server Error (Non-JSON): ${text.substring(0, 100)}...`);
+        return;
+      }
+
       logDiagnostic(`Server responded success=${result.success}`);
 
       if (result.success) {

@@ -32,7 +32,7 @@ module.exports = async (req, res) => {
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { pdfUrl, pdfData, fileName, megaSession: dynamicSession } = req.body;
+  const { pdfUrl, pdfData, fileName, megaSession: dynamicSession, cookies } = req.body;
   if ((!pdfUrl && !pdfData) || !fileName) return res.status(400).json({ error: 'Missing pdfUrl/pdfData or fileName' });
 
   const megaEmail = (process.env.MEGA_EMAIL || "").trim();
@@ -107,17 +107,20 @@ module.exports = async (req, res) => {
       pdfBuffer = Buffer.from(pdfData, 'base64');
       console.log(`Using client-provided PDF bytes (${pdfBuffer.length} bytes)`);
     } else {
-      // Fallback: fetch from URL server-side (may fail for auth-protected PDFs)
+      // Fallback: fetch from URL server-side (used for large files > 4.5MB)
+      console.log(`Fetching PDF from URL: ${pdfUrl} (hasCookies: ${!!cookies})`);
       const pdfResponse = await axios({
         method: 'get', url: pdfUrl, responseType: 'arraybuffer',
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Referer': 'https://samsung-pre-prod.pw.live/',
-          'Accept': 'application/pdf,*/*'
+          'Accept': 'application/pdf,application/octet-stream,*/*',
+          'Cookie': cookies || ''
         },
-        timeout: 15000
+        timeout: 30000 // Increase timeout for large files
       });
       pdfBuffer = Buffer.from(pdfResponse.data);
+      console.log(`Successfully fetched PDF server-side (${pdfBuffer.length} bytes)`);
     }
 
     const uploadStream = folder.upload({
