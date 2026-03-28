@@ -148,8 +148,8 @@ async function uploadToVercel(pdfUrl, fileName) {
       let payload = { fileName, megaSession: sessionToUse, pdfUrl };
 
       // Vercel has a 4.5MB limit. If base64-encoded PDF exceeds this, send URL + Cookies instead.
-      // 3.5MB raw ≈ 4.7MB base64. Let's use 3.5MB as the threshold.
-      if (arrayBuffer.byteLength > 3.5 * 1024 * 1024) {
+      // 3MB raw ≈ 4MB base64. Let's use 3MB as a safe threshold.
+      if (arrayBuffer.byteLength > 3 * 1024 * 1024) {
         logDiagnostic(`⚠️ File too large for direct upload (${fileSizeKB} KB). Switching to URL + Cookies.`);
         const cookies = await chrome.cookies.getAll({ url: pdfUrl });
         payload.cookies = cookies.map(c => `${c.name}=${c.value}`).join('; ');
