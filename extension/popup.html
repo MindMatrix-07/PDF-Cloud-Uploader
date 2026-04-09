@@ -1,77 +1,363 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Khazana Snatcher</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d26;
+      --border: #2a2d3a;
+      --accent: #00C661;
+      --accent-dim: #00a651;
+      --accent-glow: rgba(0, 198, 97, 0.15);
+      --text: #e8eaf0;
+      --text-dim: #8b8fa8;
+      --red: #ff4d6a;
+      --blue: #4d9eff;
+      --radius: 10px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      width: 300px;
-      padding: 15px;
-      font-family: 'Segoe UI', sans-serif;
+      width: 320px;
+      background: var(--bg);
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      color: var(--text);
+      padding: 0;
     }
 
-    .status {
-      color: #555;
-      font-size: 12px;
-      margin-bottom: 10px;
+    /* ── Header ── */
+    .header {
+      background: linear-gradient(135deg, #1a1d26 0%, #12141d 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 16px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
 
-    .url-box {
-      background: #f4f4f4;
-      border: 1px solid #ddd;
-      padding: 8px;
-      word-break: break-all;
-      font-size: 11px;
-      max-height: 100px;
-      overflow-y: auto;
+    .header-left { display: flex; align-items: center; gap: 9px; }
+
+    .logo {
+      width: 30px; height: 30px;
+      background: linear-gradient(135deg, var(--accent), #00d4aa);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px;
+      box-shadow: 0 0 12px var(--accent-glow);
     }
 
-    button {
-      width: 100%;
-      padding: 10px;
-      background: #00A651;
-      color: white;
-      border: none;
-      border-radius: 5px;
+    .header-title { font-size: 14px; font-weight: 700; letter-spacing: 0.3px; }
+    .header-sub { font-size: 10px; color: var(--text-dim); margin-top: 1px; }
+
+    /* ── Toggle Switch ── */
+    .toggle-section {
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    .toggle-label {
+      font-size: 11px; color: var(--text-dim);
+      line-height: 1.2; text-align: right;
+    }
+    .toggle-label strong { color: var(--accent); font-weight: 600; display: block; font-size: 12px; }
+    .toggle-label.off strong { color: var(--red); }
+
+    .toggle {
+      position: relative;
+      width: 44px; height: 24px;
+      flex-shrink: 0;
+    }
+
+    .toggle input { display: none; }
+
+    .toggle-slider {
+      position: absolute;
       cursor: pointer;
-      margin-top: 10px;
-      font-weight: bold;
+      inset: 0;
+      background: #2a2d3a;
+      border-radius: 24px;
+      transition: background 0.25s;
+      border: 1px solid var(--border);
     }
 
-    button:hover {
-      background: #008a44;
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 18px; height: 18px;
+      left: 2px; top: 2px;
+      background: #5a5e72;
+      border-radius: 50%;
+      transition: transform 0.25s, background 0.25s, box-shadow 0.25s;
+    }
+
+    .toggle input:checked + .toggle-slider {
+      background: var(--accent-glow);
+      border-color: var(--accent);
+    }
+
+    .toggle input:checked + .toggle-slider::before {
+      transform: translateX(20px);
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+    }
+
+    /* ── Status Badge ── */
+    .status-badge {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 14px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+    }
+
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      flex-shrink: 0;
+      animation: pulse 2s infinite;
+    }
+
+    .status-dot.active { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+    .status-dot.inactive { background: var(--red); animation: none; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ── Body ── */
+    .body { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+    }
+
+    .card-title {
+      font-size: 9px; font-weight: 700;
+      letter-spacing: 1px; color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    /* ── PDF URL Box ── */
+    .url-box {
+      background: #0d0f16;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 10px;
+      color: var(--text-dim);
+      word-break: break-all;
+      max-height: 70px;
+      overflow-y: auto;
+      line-height: 1.4;
+    }
+
+    .url-box.has-url { color: var(--accent); }
+
+    /* ── Chapter chip ── */
+    .chapter-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: var(--accent-glow);
+      border: 1px solid var(--accent);
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-size: 10px; font-weight: 600;
+      color: var(--accent);
+      margin-top: 6px;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      width: 100%; padding: 9px 12px;
+      border: none; border-radius: 7px;
+      font-size: 12px; font-weight: 600;
+      cursor: pointer;
+      letter-spacing: 0.3px;
+      transition: transform 0.1s, box-shadow 0.2s, opacity 0.2s;
+    }
+
+    .btn:active { transform: scale(0.97); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #00b858);
+      color: #fff;
+      box-shadow: 0 2px 12px var(--accent-glow);
+    }
+
+    .btn-primary:hover { box-shadow: 0 4px 18px rgba(0,198,97,0.35); }
+
+    .btn-secondary {
+      background: #1e2130;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      font-size: 11px;
+    }
+
+    .btn-secondary:hover { background: #252839; color: var(--text); }
+
+    .btn-danger {
+      background: rgba(255, 77, 106, 0.1);
+      color: var(--red);
+      border: 1px solid rgba(255, 77, 106, 0.25);
+      font-size: 10px; padding: 6px;
+    }
+
+    /* ── Input ── */
+    input[type="text"] {
+      width: 100%;
+      background: #0d0f16;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 10px;
+      color: var(--text);
+      outline: none;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus { border-color: var(--accent); }
+    input[type="text"]::placeholder { color: #4a4e62; }
+
+    /* ── History List ── */
+    #history-list {
+      max-height: 110px;
+      overflow-y: auto;
+      display: flex; flex-direction: column; gap: 5px;
+    }
+
+    .history-item {
+      background: #0d0f16;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 8px;
+    }
+
+    .history-file { font-size: 10px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .history-meta { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
+    .method-session { color: var(--accent); }
+    .method-url { color: var(--blue); }
+
+    /* ── Logs ── */
+    #logs {
+      font-size: 9px; color: var(--text-dim);
+      max-height: 90px;
+      overflow-y: auto;
+      line-height: 1.6;
+      font-family: monospace;
+    }
+
+    /* ── Toggle logs link ── */
+    #toggle-logs {
+      background: none; border: none;
+      color: var(--text-dim);
+      font-size: 10px;
+      cursor: pointer;
+      text-decoration: underline;
+      text-align: left;
+      padding: 0;
+      font-family: inherit;
+    }
+
+    #toggle-logs:hover { color: var(--blue); }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ── Disabled overlay hint ── */
+    .disabled-hint {
+      text-align: center;
+      font-size: 11px;
+      color: var(--red);
+      padding: 6px;
+      background: rgba(255,77,106,0.07);
+      border-radius: 6px;
+      border: 1px solid rgba(255,77,106,0.2);
     }
   </style>
 </head>
 
 <body>
-  <h3>Khazana Snatcher</h3>
-  <div class="status">Latest PDF detected:</div>
-  <div id="url" class="url-box">Open a PDF on the website first...</div>
-  <button id="download">Download Static PDF</button>
-  <div id="settings-container" style="margin-top: 15px; border-top: 1px solid #ccc; padding-top: 10px;">
-    <p style="font-size: 10px; color: #666; font-weight: bold; margin-bottom: 5px;">MEGA SESSION SETTINGS:</p>
-    <input type="text" id="session-id" placeholder="Paste MEGA Session ID here..."
-      style="width: 100%; font-size: 10px; padding: 5px; border: 1px solid #ccc; border-radius: 3px; box-sizing: border-box;">
-    <button id="save-session" style="font-size: 10px; padding: 5px; margin-top: 5px;">Save Session</button>
-  </div>
-
-  <div id="history-container" style="margin-top: 15px; border-top: 1px solid #ccc; padding-top: 10px;">
-    <p style="font-size: 10px; color: #666; font-weight: bold; margin-bottom: 5px;">RECENT UPLOADS (LOCAL):</p>
-    <div id="history-list" style="font-size: 10px; color: #333; max-height: 120px; overflow-y: auto;">
-      Loading history...
+  <!-- Header with logo + toggle -->
+  <div class="header">
+    <div class="header-left">
+      <div class="logo">📄</div>
+      <div>
+        <div class="header-title">Khazana Snatcher</div>
+        <div class="header-sub">v1.7.0 · PDF → MEGA</div>
+      </div>
+    </div>
+    <div class="toggle-section">
+      <div class="toggle-label" id="toggle-label">
+        <strong>ON</strong>Active
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="enabled-toggle" checked>
+        <span class="toggle-slider"></span>
+      </label>
     </div>
   </div>
 
-  <div id="logs-container" style="margin-top: 15px; border-top: 1px solid #ccc; padding-top: 10px; display: none;">
-    <p style="font-size: 10px; color: #666; font-weight: bold;">DIAGNOSTIC LOGS:</p>
-    <div id="logs" style="font-size: 9px; color: #444; max-height: 100px; overflow-y: auto; text-align: left;"></div>
-    <button id="clear-logs" style="font-size: 9px; margin-top: 5px;">Clear Logs</button>
+  <!-- Status bar -->
+  <div class="status-badge">
+    <span class="status-dot active" id="status-dot"></span>
+    <span id="status-text">Watching for PDFs...</span>
   </div>
-  <button id="toggle-logs"
-    style="background: none; border: none; color: blue; text-decoration: underline; cursor: pointer; font-size: 10px; margin-top: 10px;">Show
-    Debug Logs</button>
+
+  <div class="body">
+
+    <!-- Disabled hint (hidden by default) -->
+    <div class="disabled-hint" id="disabled-hint" style="display:none;">
+      ⏸ Extension is paused. Toggle ON to resume snatching PDFs.
+    </div>
+
+    <!-- Latest PDF -->
+    <div class="card">
+      <div class="card-title">Latest PDF Detected</div>
+      <div class="url-box" id="url">Open a PDF on the website first...</div>
+      <div id="chapter-chip-container"></div>
+    </div>
+
+    <!-- Actions -->
+    <button class="btn btn-primary" id="download">⬇ Download PDF Locally</button>
+
+    <!-- MEGA Session -->
+    <div class="card">
+      <div class="card-title">MEGA Session</div>
+      <input type="text" id="session-id" placeholder="Paste MEGA Session ID here...">
+      <button class="btn btn-secondary" id="save-session" style="margin-top:7px;">💾 Save Session</button>
+    </div>
+
+    <!-- History -->
+    <div class="card">
+      <div class="card-title">Recent Uploads</div>
+      <div id="history-list">
+        <span style="font-size:10px; color: var(--text-dim);">No uploads yet...</span>
+      </div>
+    </div>
+
+    <!-- Debug Logs -->
+    <div id="logs-container" class="card" style="display:none;">
+      <div class="card-title">Diagnostic Logs</div>
+      <div id="logs">No logs...</div>
+      <button class="btn btn-danger" id="clear-logs" style="margin-top:8px;">🗑 Clear Logs</button>
+    </div>
+
+    <button id="toggle-logs">🔍 Show Debug Logs</button>
+  </div>
 
   <script src="popup.js"></script>
 </body>
-
 </html>

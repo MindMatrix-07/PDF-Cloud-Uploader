@@ -1,10 +1,13 @@
-// content.js — Runs on xylem.live and pw.live pages
+// content.js — Runs on xylem.live, pw.live, and khazana.in pages
 // SEPARATE from background.js — 3 independent features
+
+// ── Browser compatibility shim ────────────────────────────────────────────
+const _browser = (typeof browser !== 'undefined' && browser.runtime) ? browser : chrome;
 
 (function () {
 
     // ── CHECK ENABLED ────────────────────────────────────────────────
-    chrome.storage.local.get(['extensionEnabled'], (res) => {
+    _browser.storage.local.get(['extensionEnabled'], (res) => {
         if (res.extensionEnabled === false) return;
         init();
     });
@@ -74,8 +77,8 @@
             if (heading) {
                 const text = heading.innerText.replace(/\(\d{4}\)/g, '').trim().toUpperCase();
                 if (text && text.length > 3 && text !== 'GENERAL') {
-                    chrome.storage.local.set({ savedChapter: text });
-                    chrome.runtime.sendMessage({ type: 'SET_CHAPTER', chapter: text }).catch(() => { });
+                    _browser.storage.local.set({ savedChapter: text });
+                    _browser.runtime.sendMessage({ type: 'SET_CHAPTER', chapter: text }).catch(() => { });
                     console.log('[Snatcher] Chapter set:', text);
                 }
             }

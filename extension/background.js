@@ -1,9 +1,13 @@
+// ── Browser compatibility shim (works in both Chrome and Firefox) ──────────
+const _browser = (typeof browser !== 'undefined' && browser.runtime) ? browser : chrome;
+
 const VERCEL_URL = "https://pdf-cloud-uploader.vercel.app/api/upload";
+const VERSION = "1.7.0";
 
 let savedChapter = "GENERAL"; // Default fallback
 
 // 1. Listen for the Chapter Name in every URL change
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+_browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   const targetUrl = changeInfo.url || tab.url;
   if (targetUrl && targetUrl.includes("topicName=")) {
     try {
@@ -12,14 +16,14 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       if (topic) {
         savedChapter = decodeURIComponent(topic).replace(/\(\d{4}\)/g, "").trim().toUpperCase();
         console.log("Memory Locked On:", savedChapter);
-        chrome.storage.local.set({ savedChapter });
+        _browser.storage.local.set({ savedChapter });
       }
     } catch (e) { }
   }
 });
 
 // Load saved chapter on startup
-chrome.storage.local.get(['savedChapter'], (res) => {
+_browser.storage.local.get(['savedChapter'], (res) => {
   if (res.savedChapter) savedChapter = res.savedChapter;
 });
 
@@ -28,10 +32,10 @@ function logDiagnostic(msg) {
   const time = new Date().toLocaleTimeString();
   const entry = `[${time}] ${msg}`;
   console.log(entry);
-  chrome.storage.local.get(['diagLogs'], (res) => {
+  _browser.storage.local.get(['diagLogs'], (res) => {
     let logs = res.diagLogs || [];
     logs.unshift(entry);
-    chrome.storage.local.set({ diagLogs: logs.slice(0, 20) });
+    _browser.storage.local.set({ diagLogs: logs.slice(0, 20) });
   });
 }
 
@@ -41,54 +45,62 @@ const processedUrls = new Set();
 function processPdf(pdfUrl, tabId, tabTitle) {
   if (!pdfUrl) return;
 
-  // SUPPORT FOR WRAPPERS (e.g., PW viewer, Xylem)
-  // If URL is a wrapper, extract the actual PDF link from parameters
-  try {
-    const urlObj = new URL(pdfUrl);
-    const nestedUrl = urlObj.searchParams.get('pdf_url') || urlObj.searchParams.get('file') || urlObj.searchParams.get('url');
-    if (nestedUrl && nestedUrl.toLowerCase().includes('.pdf')) {
-      logDiagnostic(`Extracted nested PDF: ${nestedUrl}`);
-      pdfUrl = nestedUrl;
-    }
-  } catch (e) { }
-
-  // Check if we already processed this URL recently to avoid duplicates
-  if (processedUrls.has(pdfUrl)) return;
-  processedUrls.add(pdfUrl);
-  setTimeout(() => processedUrls.delete(pdfUrl), 30000); // 30s cooldown
-
-  logDiagnostic(`🚀 PDF Detected: ${pdfUrl}`);
-
-  // Try to get title from tab title first
-  let pdfTopic = tabTitle || "Document";
-  pdfTopic = pdfTopic.replace(".pdf", "").split('|')[0].trim();
-
-  chrome.scripting.executeScript({
-    target: { tabId: tabId || 0 },
-    func: () => document.querySelector('h1, h2, .pdf-title, .header-title')?.innerText || ""
-  }, (results) => {
-    if (!chrome.runtime.lastError && results && results[0].result) {
-      pdfTopic = results[0].result.split('|')[0].trim();
+  // ── CHECK IF EXTENSION IS ENABLED ───────────────────────────────────────
+  _browser.storage.local.get(['extensionEnabled'], (res) => {
+    if (res.extensionEnabled === false) {
+      console.log('[Snatcher] Extension is disabled — skipping PDF.');
+      return;
     }
 
-    const finalFileName = `${pdfTopic}-${savedChapter}.pdf`.replace(/[\\/:*?"<>|]/g, "").trim();
-    logDiagnostic(`Naming file: ${finalFileName}`);
+    // SUPPORT FOR WRAPPERS (e.g., PW viewer, Xylem)
+    // If URL is a wrapper, extract the actual PDF link from parameters
+    try {
+      const urlObj = new URL(pdfUrl);
+      const nestedUrl = urlObj.searchParams.get('pdf_url') || urlObj.searchParams.get('file') || urlObj.searchParams.get('url');
+      if (nestedUrl && nestedUrl.toLowerCase().includes('.pdf')) {
+        logDiagnostic(`Extracted nested PDF: ${nestedUrl}`);
+        pdfUrl = nestedUrl;
+      }
+    } catch (e) { }
 
-    chrome.storage.local.set({ lastUrl: pdfUrl, lastFileName: finalFileName });
-    uploadToVercel(pdfUrl, finalFileName);
+    // Check if we already processed this URL recently to avoid duplicates
+    if (processedUrls.has(pdfUrl)) return;
+    processedUrls.add(pdfUrl);
+    setTimeout(() => processedUrls.delete(pdfUrl), 30000); // 30s cooldown
 
-    chrome.notifications?.create({
-      type: 'basic',
-      iconUrl: 'icon.png',
-      title: 'PDF Snatched!',
-      message: `Sending ${finalFileName} to MEGA...`,
-      priority: 2
+    logDiagnostic(`🚀 PDF Detected: ${pdfUrl}`);
+
+    // Try to get title from tab title first
+    let pdfTopic = tabTitle || "Document";
+    pdfTopic = pdfTopic.replace(".pdf", "").split('|')[0].trim();
+
+    _browser.scripting.executeScript({
+      target: { tabId: tabId || 0 },
+      func: () => document.querySelector('h1, h2, .pdf-title, .header-title')?.innerText || ""
+    }, (results) => {
+      if (!_browser.runtime.lastError && results && results[0].result) {
+        pdfTopic = results[0].result.split('|')[0].trim();
+      }
+
+      const finalFileName = `${pdfTopic}-${savedChapter}.pdf`.replace(/[\\/:*?"<>|]/g, "").trim();
+      logDiagnostic(`Naming file: ${finalFileName}`);
+
+      _browser.storage.local.set({ lastUrl: pdfUrl, lastFileName: finalFileName });
+      uploadToVercel(pdfUrl, finalFileName);
+
+      _browser.notifications?.create({
+        type: 'basic',
+        iconUrl: 'icon.png',
+        title: 'PDF Snatched!',
+        message: `Sending ${finalFileName} to MEGA...`,
+        priority: 2
+      });
     });
   });
 }
 
 // 2a. Navigation-based detection
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+_browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (tab.url && tab.url.toLowerCase().includes(".pdf")) {
     if (changeInfo.status === 'complete' || tab.status === 'complete') {
       logDiagnostic(`Tab detection hit: ${tab.url}`);
@@ -98,7 +110,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 
 // 2b. Header-based detection (most reliable — catches ALL PDFs)
-chrome.webRequest.onHeadersReceived.addListener(
+_browser.webRequest.onHeadersReceived.addListener(
   (details) => {
     if (details.type === 'main_frame' || details.type === 'sub_frame') {
       const contentType = details.responseHeaders?.find(h => h.name.toLowerCase() === 'content-type')?.value || "";
@@ -114,10 +126,9 @@ chrome.webRequest.onHeadersReceived.addListener(
 );
 
 async function uploadToVercel(pdfUrl, fileName) {
-  const VERSION = "1.6.0";
   logDiagnostic(`[v${VERSION}] Fetching PDF bytes locally: ${pdfUrl}`);
 
-  chrome.storage.local.get(['megaSession'], async (res) => {
+  _browser.storage.local.get(['megaSession'], async (res) => {
     const sessionToUse = res.megaSession || "";
     try {
       // ── STEP 1: Download PDF in the service worker (has user cookies/session) ──
@@ -144,7 +155,7 @@ async function uploadToVercel(pdfUrl, fileName) {
       // Vercel limit is 4.5MB. 2MB raw ≈ 2.7MB base64 (very safe).
       if (arrayBuffer.byteLength > 2 * 1024 * 1024) {
         logDiagnostic(`⚠️ [v${VERSION}] File > 2MB. Switching to URL + Cookies.`);
-        const cookies = await chrome.cookies.getAll({ url: pdfUrl });
+        const cookies = await _browser.cookies.getAll({ url: pdfUrl });
         payload.cookies = cookies.map(c => `${c.name}=${c.value}`).join('; ');
       } else {
         const uint8 = new Uint8Array(arrayBuffer);
@@ -177,11 +188,18 @@ async function uploadToVercel(pdfUrl, fileName) {
       if (result.success) {
         // Auto-save session token from server (prevents new MEGA IPs on every upload)
         if (result.sessionString && !sessionToUse) {
-          chrome.storage.local.set({ megaSession: result.sessionString });
+          _browser.storage.local.set({ megaSession: result.sessionString });
           logDiagnostic(`✅ Session captured & saved (${result.method}). Future uploads will reuse it.`);
         }
 
-        chrome.notifications?.create({
+        // Save to upload history
+        _browser.storage.local.get(['uploadHistory'], (hr) => {
+          let history = hr.uploadHistory || [];
+          history.unshift({ fileName, method: result.method, timestamp: Date.now(), chapter: result.chapter });
+          _browser.storage.local.set({ uploadHistory: history.slice(0, 10) });
+        });
+
+        _browser.notifications?.create({
           type: 'basic',
           iconUrl: 'icon.png',
           title: 'MEGA Upload Done!',

@@ -3,6 +3,12 @@
   "name": "Khazana PDF Downloader",
   "version": "1.7.0",
   "description": "Auto-detects and uploads PDFs from Khazana/PW to your MEGA cloud.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "khazana-snatcher@extension",
+      "strict_min_version": "109.0"
+    }
+  },
   "permissions": [
     "webRequest",
     "storage",
@@ -17,7 +23,7 @@
     "<all_urls>"
   ],
   "background": {
-    "service_worker": "background.js"
+    "scripts": ["background.js"]
   },
   "content_scripts": [
     {
